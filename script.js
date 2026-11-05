@@ -1,78 +1,63 @@
-let planetScore = 100;
-let comfortScore = 100;
-let currentStep = 0;
+let health = 80;
+let energy = 100;
+let dia = 1;
 
-const questions = [
-  {
-    time: "07:00 AM // HORA DE ACORDAR",
-    text: "Você vai tomar banho para ir à escola. Qual é a sua escolha?",
-    optA: { text: "Banho rápido de 5 minutos.", planet: 0, comfort: 10 },
-    optB: { text: "Banho quente de 20 minutos relaxante.", planet: -15, comfort: 30 }
-  },
-  {
-    time: "12:30 PM // HORÁRIO DO ALMOÇO",
-    text: "Hora de comer! O que vai para o seu prato?",
-    optA: { text: "Refeição caseira com legumes e sem desperdício.", planet: 10, comfort: 10 },
-    optB: { text: "Fast-food cheio de embalagens plásticas descartáveis.", planet: -20, comfort: 25 }
-  },
-  {
-    time: "02:00 PM // SUA LOCOMOÇÃO",
-    text: "Você precisa ir encontrar seus amigos na cidade.",
-    optA: { text: "Ir de bicicleta ou transporte coletivo.", planet: 20, comfort: -10 },
-    optB: { text: "Pedir um carro por aplicativo individual.", planet: -25, comfort: 30 }
+const acoes = {
+  reciclar: { health: 15, energy: -20 },
+  arvore: { health: 25, energy: -35 },
+  fastfood: { health: -20, energy: -10 },
+  carro: { health: -30, energy: -15 }
+};
+
+function executarAcao(tipo) {
+  const acao = acoes[tipo];
+
+  if (energy + acao.energy < 0) {
+    alert("Sua energia acabou por hoje! Clique em 'AVANÇAR PARA O PRÓXIMO DIA' para recarregar.");
+    return;
   }
-];
 
-function atualizarHUD() {
-  planetScore = Math.max(0, Math.min(100, planetScore));
-  comfortScore = Math.max(0, Math.min(100, comfortScore));
+  health = Math.max(0, Math.min(100, health + acao.health));
+  energy = Math.max(0, Math.min(100, energy + acao.energy));
 
-  document.getElementById('planet-bar').style.width = planetScore + '%';
-  document.getElementById('planet-val').innerText = planetScore + '%';
-
-  document.getElementById('comfort-bar').style.width = comfortScore + '%';
-  document.getElementById('comfort-val').innerText = comfortScore + '%';
+  atualizarInterface();
 }
 
-function escolher(opcaoIndex) {
-  const q = questions[currentStep];
-  const escolha = opcaoIndex === 0 ? q.optA : q.optB;
+function passarDia() {
+  dia++;
+  energy = 100; // Recarrega energia para o novo dia
+  // O planeta perde um pouco de saúde natural a cada dia sem cuidados
+  health = Math.max(0, health - 10);
+  
+  atualizarInterface();
+  alert(`Dia ${dia} iniciado! A energia foi restaurada.`);
+}
 
-  planetScore += escolha.planet;
-  comfortScore += escolha.comfort;
-  atualizarHUD();
+function atualizarInterface() {
+  // Atualiza as barras
+  document.getElementById('health-bar').style.width = health + '%';
+  document.getElementById('health-val').innerText = health + '%';
 
-  currentStep++;
+  document.getElementById('energy-bar').style.width = energy + '%';
+  document.getElementById('energy-val').innerText = energy + '%';
 
-  if (currentStep < questions.length) {
-    carregarPergunta();
+  // Atualiza o estado visual do Avatar (Planeta)
+  const avatar = document.getElementById('planet-avatar');
+  const statusText = document.getElementById('planet-status-text');
+
+  avatar.className = 'planet-core ';
+
+  if (health >= 70) {
+    avatar.classList.add('mood-healthy');
+    statusText.innerText = `DIA ${dia} // ESTADO: PROSPERO`;
+    statusText.style.color = "#00ff88";
+  } else if (health >= 35) {
+    avatar.classList.add('mood-warning');
+    statusText.innerText = `DIA ${dia} // ESTADO: ALERTA`;
+    statusText.style.color = "#ffe600";
   } else {
-    finalizarJogo();
+    avatar.classList.add('mood-danger');
+    statusText.innerText = `DIA ${dia} // ESTADO: CRÍTICO`;
+    statusText.style.color = "#ff0055";
   }
-}
-
-function carregarPergunta() {
-  const q = questions[currentStep];
-  document.getElementById('card-time').innerText = q.time;
-  document.getElementById('card-text').innerText = q.text;
-  document.getElementById('optA-text').innerText = q.optA.text;
-  document.getElementById('optB-text').innerText = q.optB.text;
-}
-
-function finalizarJogo() {
-  let mensagemFinal = "";
-  if (planetScore >= 70) {
-    mensagemFinal = "CONQUISTA DESBLOQUEADA: Guardião do Planeta! Suas atitudes garantiram um futuro sustentável no OASIS e no mundo real.";
-  } else if (planetScore >= 40) {
-    mensagemFinal = "NÍVEL INTERMEDIÁRIO: Você equilibrou seu conforto com o ambiente, mas ainda há dados de poluição críticos.";
-  } else {
-    mensagemFinal = "ALERTA DE GAME OVER ECOLÓGICO: O planeta não suportará esse ritmo de consumo por muito tempo!";
-  }
-
-  document.getElementById('game-card').innerHTML = `
-    <h2 class="time-tag">SIMULAÇÃO CONCLUÍDA</h2>
-    <p class="question-text">${mensagemFinal}</p>
-    <p style="color: #00f3ff; margin-bottom: 15px;">Pontuação Final - Planeta: ${planetScore}% | Conforto: ${comfortScore}%</p>
-    <button class="btn-oasis" onclick="location.reload()">REINICIAR SIMULAÇÃO</button>
-  `;
 }

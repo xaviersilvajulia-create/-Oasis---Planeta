@@ -3,43 +3,80 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OASIS // Protocolo Planeta</title>
+  <title>OASIS // Eco-Pet Simulator</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="vr-hud">
     <header class="hud-header">
-      <h1 class="glitch" data-text="OASIS // SIMULAÇÃO">OASIS // SIMULAÇÃO</h1>
-      <p class="subtitle">SUAS ESCOLHAS MOLDAM O FUTURO DO PLANETA</p>
+      <h1 class="glitch">OASIS // ECO-AVATAR</h1>
+      <p class="subtitle">SIMULADOR DE MANTENIMENTO PLANETÁRIO</p>
     </header>
 
+    <!-- Estado do Avatar / Planeta Holográfico -->
+    <div class="pet-display">
+      <div id="planet-avatar" class="planet-core mood-healthy">
+        <div class="planet-ring"></div>
+      </div>
+      <div id="planet-status-text" class="status-badge">ESTADO: SAUDÁVEL</div>
+    </div>
+
+    <!-- Barras de Status em Tempo Real -->
     <div class="status-container">
       <div class="status-box">
-        <span class="status-label">SAÚDE DO PLANETA</span>
-        <div class="bar-outer"><div id="planet-bar" class="bar-inner planet" style="width: 100%;"></div></div>
-        <span id="planet-val" class="status-val">100%</span>
+        <span class="status-label">SAÚDE AMBIENTAL</span>
+        <div class="bar-outer"><div id="health-bar" class="bar-inner health" style="width: 80%;"></div></div>
+        <span id="health-val" class="status-val">80%</span>
       </div>
       <div class="status-box">
-        <span class="status-label">CONFORTO PESSOAL</span>
-        <div class="bar-outer"><div id="comfort-bar" class="bar-inner comfort" style="width: 100%;"></div></div>
-        <span id="comfort-val" class="status-val">100%</span>
+        <span class="status-label">ENERGIA DO DIA</span>
+        <div class="bar-outer"><div id="energy-bar" class="bar-inner energy" style="width: 100%;"></div></div>
+        <span id="energy-val" class="status-val">100%</span>
       </div>
     </div>
 
-    <main id="game-card" class="hud-card">
-      <h2 id="card-time" class="time-tag">07:00 AM // PRIMEIRO DILEMA</h2>
-      <p id="card-text" class="question-text">Você acaba de acordar para ir à escola. Qual é a sua primeira atitude do dia?</p>
-      
-      <div class="options-container">
-        <button class="btn-oasis" onclick="escolher(0)">
-          <span class="btn-code">OPT_A</span>
-          <span id="optA-text">Banho rápido de 5 minutos para economizar água.</span>
+    <!-- Painel de Ações Interativas -->
+    <main class="hud-card">
+      <h2 class="section-title">PAINEL DE AÇÕES DIÁRIAS</h2>
+      <p class="instruction">Escolha ações para cuidar do seu ecossistema antes que a energia esgote:</p>
+
+      <div class="actions-grid">
+        <button class="btn-oasis" onclick="executarAcao('reciclar')">
+          <span class="btn-icon">♻️</span>
+          <div class="btn-info">
+            <strong>Reciclar Lixo</strong>
+            <small>+15% Saúde | -20% Energia</small>
+          </div>
         </button>
-        <button class="btn-oasis" onclick="escolher(1)">
-          <span class="btn-code">OPT_B</span>
-          <span id="optB-text">Banho longo de 20 minutos bem quente para relaxar.</span>
+
+        <button class="btn-oasis" onclick="executarAcao('arvore')">
+          <span class="btn-icon">🌳</span>
+          <div class="btn-info">
+            <strong>Plantar Árvore Virtual</strong>
+            <small>+25% Saúde | -35% Energia</small>
+          </div>
         </button>
+
+        <button class="btn-oasis" onclick="executarAcao('fastfood')">
+          <span class="btn-icon">🍔</span>
+          <div class="btn-info">
+            <strong>Comprar Fast-Food</strong>
+            <small>-20% Saúde | -10% Energia</small>
+          </div>
+        </button>
+
+        <button class="btn-oasis" onclick="executarAcao('carro')">
+          <span class="btn-icon">🚗</span>
+          <div class="btn-info">
+            <strong>Viagem de Carro</strong>
+            <small>-30% Saúde | -15% Energia</small>
+          </div>
+        </button>
+      </div>
+
+      <div class="control-footer">
+        <button class="btn-reset" onclick="passarDia()">🌙 AVANÇAR PARA O PRÓXIMO DIA</button>
       </div>
     </main>
   </div>
