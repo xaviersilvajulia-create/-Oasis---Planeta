@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- TELA DE LOGIN DO JOGADOR -->
+  <!-- TELA DE LOGIN -->
   <div id="login-screen" class="vr-hud">
     <header class="hud-header">
       <h1 class="glitch">OASIS // CONEXÃO</h1>
@@ -24,11 +24,10 @@
   <!-- INTERFACE PRINCIPAL DO JOGO -->
   <div id="game-screen" class="vr-hud" style="display: none;">
     <header class="hud-header">
-      <h1 class="glitch">OASIS // CIDADE ECOLÓGICA</h1>
-      <p class="subtitle">JOGADOR: <span id="display-player-name" class="player-highlight">---</span> | NÍVEL DE SAÚDE: <span id="health-val">100%</span></p>
+      <h1 class="glitch">OASIS // CIDADE VIVA</h1>
+      <p class="subtitle">JOGADOR: <span id="display-player-name" class="player-highlight">---</span> | SAÚDE DA CIDADE: <span id="health-val">100%</span></p>
     </header>
 
-    <!-- TELA DO JOGO (CANVAS) -->
     <div class="canvas-container">
       <canvas id="gameCanvas" width="600" height="400"></canvas>
       <div id="interaction-prompt" class="prompt-box" style="display: none;">
@@ -36,16 +35,15 @@
       </div>
     </div>
 
-    <!-- CAIXA DE DIÁLOGO / MENSAGENS -->
+    <!-- CAIXA DE DIÁLOGO -->
     <div id="dialog-box" class="dialog-card" style="display: none;">
       <h3 id="npc-name" class="npc-title">Cidadão</h3>
       <p id="npc-text" class="npc-message">...</p>
       <div id="dialog-options" class="options-grid"></div>
     </div>
 
-    <!-- CONTROLES NA TELA PARA TELEMÓVEL/RATO -->
     <div class="touch-controls">
-      <p class="control-hint">Usa as teclas <span class="key-highlight">W, A, S, D</span> ou as <span class="key-highlight">Setas</span> para andar.</p>
+      <p class="control-hint">Usa as teclas <span class="key-highlight">W, A, S, D</span> ou as <span class="key-highlight">Setas</span> para te moveres.</p>
     </div>
   </div>
 

@@ -25,7 +25,7 @@ body {
   max-width: 650px;
   border: 2px solid #00f3ff;
   box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
-  background: rgba(10, 15, 30, 0.9);
+  background: rgba(10, 15, 30, 0.95);
   border-radius: 8px;
   padding: 20px;
 }
@@ -54,7 +54,7 @@ h1 {
   font-weight: bold;
 }
 
-/* Login Screen */
+/* Login */
 .login-box {
   display: flex;
   flex-direction: column;
@@ -96,7 +96,7 @@ h1 {
   box-shadow: 0 0 10px #00f3ff;
 }
 
-/* Canvas Area */
+/* Canvas */
 .canvas-container {
   position: relative;
   display: flex;
@@ -118,7 +118,7 @@ canvas {
 .prompt-box {
   position: absolute;
   bottom: 15px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.9);
   border: 1px solid #ffe600;
   color: #ffe600;
   padding: 8px 14px;
@@ -132,7 +132,7 @@ canvas {
   font-weight: bold;
 }
 
-/* Dialog Box */
+/* Diálogo */
 .dialog-card {
   border: 1px solid #ff0055;
   background: rgba(10, 5, 20, 0.95);
