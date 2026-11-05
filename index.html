@@ -3,82 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OASIS // Eco-Pet Simulator</title>
+  <title>OASIS // RPG Ecológico</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="vr-hud">
+  <!-- TELA DE LOGIN DO JOGADOR -->
+  <div id="login-screen" class="vr-hud">
     <header class="hud-header">
-      <h1 class="glitch">OASIS // ECO-AVATAR</h1>
-      <p class="subtitle">SIMULADOR DE MANTENIMENTO PLANETÁRIO</p>
+      <h1 class="glitch">OASIS // CONEXÃO</h1>
+      <p class="subtitle">REGISTO DE NOVO JOGADOR</p>
+    </header>
+    <div class="login-box">
+      <label for="player-name-input" class="login-label">DIGITA O TEU NICKNAME:</label>
+      <input type="text" id="player-name-input" placeholder="Ex: Parzival, Art3mis..." maxlength="15">
+      <button class="btn-oasis btn-start" onclick="iniciarJogo()">ENTRAR NO OASIS</button>
+    </div>
+  </div>
+
+  <!-- INTERFACE PRINCIPAL DO JOGO -->
+  <div id="game-screen" class="vr-hud" style="display: none;">
+    <header class="hud-header">
+      <h1 class="glitch">OASIS // CIDADE ECOLÓGICA</h1>
+      <p class="subtitle">JOGADOR: <span id="display-player-name" class="player-highlight">---</span> | NÍVEL DE SAÚDE: <span id="health-val">100%</span></p>
     </header>
 
-    <!-- Estado do Avatar / Planeta Holográfico -->
-    <div class="pet-display">
-      <div id="planet-avatar" class="planet-core mood-healthy">
-        <div class="planet-ring"></div>
-      </div>
-      <div id="planet-status-text" class="status-badge">ESTADO: SAUDÁVEL</div>
-    </div>
-
-    <!-- Barras de Status em Tempo Real -->
-    <div class="status-container">
-      <div class="status-box">
-        <span class="status-label">SAÚDE AMBIENTAL</span>
-        <div class="bar-outer"><div id="health-bar" class="bar-inner health" style="width: 80%;"></div></div>
-        <span id="health-val" class="status-val">80%</span>
-      </div>
-      <div class="status-box">
-        <span class="status-label">ENERGIA DO DIA</span>
-        <div class="bar-outer"><div id="energy-bar" class="bar-inner energy" style="width: 100%;"></div></div>
-        <span id="energy-val" class="status-val">100%</span>
+    <!-- TELA DO JOGO (CANVAS) -->
+    <div class="canvas-container">
+      <canvas id="gameCanvas" width="600" height="400"></canvas>
+      <div id="interaction-prompt" class="prompt-box" style="display: none;">
+        Pressiona <span class="key-highlight">[E]</span> ou <span class="key-highlight">[ESPAÇO]</span> para conversar
       </div>
     </div>
 
-    <!-- Painel de Ações Interativas -->
-    <main class="hud-card">
-      <h2 class="section-title">PAINEL DE AÇÕES DIÁRIAS</h2>
-      <p class="instruction">Escolha ações para cuidar do seu ecossistema antes que a energia esgote:</p>
+    <!-- CAIXA DE DIÁLOGO / MENSAGENS -->
+    <div id="dialog-box" class="dialog-card" style="display: none;">
+      <h3 id="npc-name" class="npc-title">Cidadão</h3>
+      <p id="npc-text" class="npc-message">...</p>
+      <div id="dialog-options" class="options-grid"></div>
+    </div>
 
-      <div class="actions-grid">
-        <button class="btn-oasis" onclick="executarAcao('reciclar')">
-          <span class="btn-icon">♻️</span>
-          <div class="btn-info">
-            <strong>Reciclar Lixo</strong>
-            <small>+15% Saúde | -20% Energia</small>
-          </div>
-        </button>
-
-        <button class="btn-oasis" onclick="executarAcao('arvore')">
-          <span class="btn-icon">🌳</span>
-          <div class="btn-info">
-            <strong>Plantar Árvore Virtual</strong>
-            <small>+25% Saúde | -35% Energia</small>
-          </div>
-        </button>
-
-        <button class="btn-oasis" onclick="executarAcao('fastfood')">
-          <span class="btn-icon">🍔</span>
-          <div class="btn-info">
-            <strong>Comprar Fast-Food</strong>
-            <small>-20% Saúde | -10% Energia</small>
-          </div>
-        </button>
-
-        <button class="btn-oasis" onclick="executarAcao('carro')">
-          <span class="btn-icon">🚗</span>
-          <div class="btn-info">
-            <strong>Viagem de Carro</strong>
-            <small>-30% Saúde | -15% Energia</small>
-          </div>
-        </button>
-      </div>
-
-      <div class="control-footer">
-        <button class="btn-reset" onclick="passarDia()">🌙 AVANÇAR PARA O PRÓXIMO DIA</button>
-      </div>
-    </main>
+    <!-- CONTROLES NA TELA PARA TELEMÓVEL/RATO -->
+    <div class="touch-controls">
+      <p class="control-hint">Usa as teclas <span class="key-highlight">W, A, S, D</span> ou as <span class="key-highlight">Setas</span> para andar.</p>
+    </div>
   </div>
 
   <script src="script.js"></script>

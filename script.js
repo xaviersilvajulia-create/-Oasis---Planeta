@@ -1,63 +1,188 @@
-let health = 80;
-let energy = 100;
-let dia = 1;
+let playerName = "Jogador";
+let health = 100;
+let canvas, ctx;
+let activeNPC = null;
 
-const acoes = {
-  reciclar: { health: 15, energy: -20 },
-  arvore: { health: 25, energy: -35 },
-  fastfood: { health: -20, energy: -10 },
-  carro: { health: -30, energy: -15 }
+// Objeto do Jogador
+const player = {
+  x: 280,
+  y: 180,
+  size: 20,
+  speed: 3,
+  color: '#00f3ff'
 };
 
-function executarAcao(tipo) {
-  const acao = acoes[tipo];
+// Teclas pressionadas
+const keys = {};
 
-  if (energy + acao.energy < 0) {
-    alert("Sua energia acabou por hoje! Clique em 'AVANÇAR PARA O PRÓXIMO DIA' para recarregar.");
-    return;
+// Lista de Habitantes/NPCs pelo mapa
+const npcs = [
+  {
+    id: 1,
+    name: "Cidadão Pedro",
+    x: 100,
+    y: 100,
+    size: 20,
+    color: '#ffe600',
+    dialog: "Estou com muita pressa para ir ao trabalho. Devo ir de carro individual ou pegar a bicicleta?",
+    options: [
+      { text: "Vai de bicicleta! Ajuda o trânsito e reduz o CO2.", healthChange: 10, response: "Boa ideia! Vou pedalando hoje." },
+      { text: "Vai de carro para economizar tempo.", healthChange: -15, response: "Vou de carro então, mas sei que polui..." }
+    ],
+    solved: false
+  },
+  {
+    id: 2,
+    name: "Moradora Ana",
+    x: 450,
+    y: 120,
+    size: 20,
+    color: '#ff0055',
+    dialog: "Sobrou bastante óleo de fritura. Estava pensando em despejar na pia da cozinha.",
+    options: [
+      { text: "Não faça isso! Guarde numa garrafa PET e leve à reciclagem.", healthChange: 15, response: "Verdade, 1 litro de óleo contamina muita água!" },
+      { text: "Pode jogar, é mais prático.", healthChange: -20, response: "Espero que não entupa o cano da cidade..." }
+    ],
+    solved: false
+  },
+  {
+    id: 3,
+    name: "Estudante Lucas",
+    x: 250,
+    y: 300,
+    size: 20,
+    color: '#00ff88',
+    dialog: "Tenho várias garrafas plásticas vazias. Devo jogar no lixo comum ou buscar um ponto de coleta?",
+    options: [
+      { text: "Usa a coleta seletiva da escola!", healthChange: 10, response: "Excelente! Vou levar para a lixeira reciclável." },
+      { text: "Joga no lixo comum mesmo.", healthChange: -10, response: "Que pena, vai direto para o aterro sanitário." }
+    ],
+    solved: false
+  }
+];
+
+function iniciarJogo() {
+  const inputName = document.getElementById('player-name-input').value.trim();
+  if (inputName !== "") playerName = inputName;
+
+  document.getElementById('display-player-name').innerText = playerName;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+
+  // Eventos do Teclado
+  window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+  requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+  atualizarMovimento();
+  verificarProximidadeNPC();
+  desenhar();
+  requestAnimationFrame(gameLoop);
+}
+
+function atualizarMovimento() {
+  if (keys['w'] || keys['arrowup']) if (player.y > 0) player.y -= player.speed;
+  if (keys['s'] || keys['arrowdown']) if (player.y < canvas.height - player.size) player.y += player.speed;
+  if (keys['a'] || keys['arrowleft']) if (player.x > 0) player.x -= player.speed;
+  if (keys['d'] || keys['arrowright']) if (player.x < canvas.width - player.size) player.x += player.speed;
+}
+
+function verificarProximidadeNPC() {
+  let pertoDeAlgum = false;
+  activeNPC = null;
+
+  for (let npc of npcs) {
+    const dist = Math.hypot((player.x + player.size/2) - (npc.x + npc.size/2), (player.y + player.size/2) - (npc.y + npc.size/2));
+    if (dist < 40 && !npc.solved) {
+      pertoDeAlgum = true;
+      activeNPC = npc;
+      break;
+    }
   }
 
-  health = Math.max(0, Math.min(100, health + acao.health));
-  energy = Math.max(0, Math.min(100, energy + acao.energy));
-
-  atualizarInterface();
-}
-
-function passarDia() {
-  dia++;
-  energy = 100; // Recarrega energia para o novo dia
-  // O planeta perde um pouco de saúde natural a cada dia sem cuidados
-  health = Math.max(0, health - 10);
-  
-  atualizarInterface();
-  alert(`Dia ${dia} iniciado! A energia foi restaurada.`);
-}
-
-function atualizarInterface() {
-  // Atualiza as barras
-  document.getElementById('health-bar').style.width = health + '%';
-  document.getElementById('health-val').innerText = health + '%';
-
-  document.getElementById('energy-bar').style.width = energy + '%';
-  document.getElementById('energy-val').innerText = energy + '%';
-
-  // Atualiza o estado visual do Avatar (Planeta)
-  const avatar = document.getElementById('planet-avatar');
-  const statusText = document.getElementById('planet-status-text');
-
-  avatar.className = 'planet-core ';
-
-  if (health >= 70) {
-    avatar.classList.add('mood-healthy');
-    statusText.innerText = `DIA ${dia} // ESTADO: PROSPERO`;
-    statusText.style.color = "#00ff88";
-  } else if (health >= 35) {
-    avatar.classList.add('mood-warning');
-    statusText.innerText = `DIA ${dia} // ESTADO: ALERTA`;
-    statusText.style.color = "#ffe600";
+  const prompt = document.getElementById('interaction-prompt');
+  if (pertoDeAlgum) {
+    prompt.style.display = 'block';
+    if (keys['e'] || keys[' ']) {
+      abrirDialogo(activeNPC);
+    }
   } else {
-    avatar.classList.add('mood-danger');
-    statusText.innerText = `DIA ${dia} // ESTADO: CRÍTICO`;
-    statusText.style.color = "#ff0055";
+    prompt.style.display = 'none';
   }
+}
+
+function abrirDialogo(npc) {
+  document.getElementById('dialog-box').style.display = 'block';
+  document.getElementById('npc-name').innerText = npc.name;
+  document.getElementById('npc-text').innerText = npc.dialog;
+
+  const grid = document.getElementById('dialog-options');
+  grid.innerHTML = '';
+
+  npc.options.forEach((opt, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-oasis';
+    btn.innerText = opt.text;
+    btn.onclick = () => responderNPC(npc, opt);
+    grid.appendChild(btn);
+  });
+}
+
+function responderNPC(npc, opcao) {
+  health = Math.max(0, Math.min(100, health + opcao.healthChange));
+  document.getElementById('health-val').innerText = health + '%';
+  npc.solved = true;
+
+  document.getElementById('npc-text').innerText = `${opcao.response}`;
+  document.getElementById('dialog-options').innerHTML = `
+    <button class="btn-oasis" onclick="fecharDialogo()">Continuar a explorar</button>
+  `;
+}
+
+function fecharDialogo() {
+  document.getElementById('dialog-box').style.display = 'none';
+}
+
+function desenhar() {
+  // Limpar fundo
+  ctx.fillStyle = '#050a14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Desenhar grelha Cyberpunk
+  ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += 30) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += 30) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+
+  // Desenhar NPCs
+  for (let npc of npcs) {
+    ctx.fillStyle = npc.solved ? '#555555' : npc.color;
+    ctx.fillRect(npc.x, npc.y, npc.size, npc.size);
+
+    // Efeito de brilho em NPCs ativos
+    if (!npc.solved) {
+      ctx.shadowColor = npc.color;
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeRect(npc.x, npc.y, npc.size, npc.size);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // Desenhar Jogador
+  ctx.fillStyle = player.color;
+  ctx.shadowColor = player.color;
+  ctx.shadowBlur = 12;
+  ctx.fillRect(player.x, player.y, player.size, player.size);
+  ctx.shadowBlur = 0;
 }
