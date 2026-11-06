@@ -1,79 +1,80 @@
-let playerName = "Jogador";
+let playerName = "Sobrevivente";
 let health = 100;
+let supplies = 80;
 let canvas, ctx;
 let activeNPC = null;
 let animFrame = 0;
 
-// Jogador com animação e sprite de boneco
+// Jogador
 const player = {
   x: 280,
   y: 180,
   width: 20,
   height: 28,
-  speed: 2.5,
-  skinColor: '#00f3ff',
-  shirtColor: '#ff0055',
+  speed: 2.3,
+  skinColor: '#ffcc99',
+  shirtColor: '#333333',
   isMoving: false
 };
 
 const keys = {};
 
-// Cidadãos que andam sozinhos pelo mapa
+// Sobreviventes pelo mapa pós-apocalíptico
 const npcs = [
   {
     id: 1,
-    name: "Cidadão Pedro",
-    x: 100,
+    name: "Sobrevivente Marcus",
+    x: 120,
     y: 100,
     width: 20,
     height: 28,
-    skinColor: '#ffe600',
-    shirtColor: '#9900ff',
+    skinColor: '#d2b48c',
+    shirtColor: '#553311',
     vx: 1,
     vy: 0,
     moveTimer: 0,
-    dialog: "Estou com muita pressa para ir ao trabalho. Devo ir de carro individual ou pegar a bicicleta?",
+    dialog: "Encontrei a última fonte de água não contaminada da região, mas o meu grupo está fraco. Se partilharmos com todos, a água acaba em dois dias.",
     options: [
-      { text: "Vai de bicicleta! Ajuda o trânsito e reduz o CO2.", healthChange: 10, response: "Boa ideia! Vou pedalando hoje." },
-      { text: "Vai de carro para economizar tempo.", healthChange: -15, response: "Vou de carro então, mas sei que polui..." }
+      { text: "Racionar rigorosamente entre todos os habitantes.", healthChange: -10, suppliesChange: 15, response: "Vai ser difícil, mas pelo menos todos têm uma hipótese de sobreviver." },
+      { text: "Guardar a água apenas para o teu grupo prioritário.", healthChange: 15, suppliesChange: -20, response: "O teu grupo sobreviveu, mas os outros ficaram desidratados..." }
     ],
     solved: false
   },
   {
     id: 2,
-    name: "Moradora Ana",
-    x: 450,
-    y: 120,
+    name: "Doutora Elena",
+    x: 440,
+    y: 140,
     width: 20,
     height: 28,
-    skinColor: '#ff0055',
-    shirtColor: '#00ff88',
+    skinColor: '#ffdbac',
+    shirtColor: '#882222',
     vx: 0,
     vy: 1,
     moveTimer: 0,
-    dialog: "Sobrou bastante óleo de fritura. Estava pensando em despejar na pia da cozinha.",
+    dialog: "Uma tempestade ácida aproxima-se. Temos apenas um abrigo blindado com capacidade limitada. Quem devemos priorizar?",
     options: [
-      { text: "Não faça isso! Guarde numa garrafa PET e leve à reciclagem.", healthChange: 15, response: "Verdade, 1 litro de óleo contamina muita água!" },
-      { text: "Pode jogar, é mais prático.", healthChange: -20, response: "Espero que não entupa o cano da cidade..." }
+      { text: "Priorizar crianças e os doentes.", healthChange: 10, suppliesChange: -15, response: "Garantiste o futuro, mas consumiste muitos recursos de emergência." },
+      { text: "Priorizar os trabalhadores que mantêm os geradores.", healthChange: -15, suppliesChange: 20, response: "A energia da base manteve-se estável, mas a moral caiu drasticamente." }
     ],
     solved: false
   },
   {
     id: 3,
-    name: "Estudante Lucas",
-    x: 250,
-    y: 280,
+    name: "Saqueador Arlo",
+    x: 220,
+    y: 290,
     width: 20,
     height: 28,
-    skinColor: '#00ff88',
-    shirtColor: '#ffe600',
+    skinColor: '#8d5524',
+    shirtColor: '#444444',
     vx: -1,
     vy: 0,
     moveTimer: 0,
-    dialog: "Tenho várias garrafas plásticas vazias. Devo jogar no lixo comum ou buscar um ponto de coleta?",
+    dialog: "Achei um depósito de mantimentos antigo num edifício prestes a ruir. Posso tentar entrar solto ou pedimos ajuda à equipa?",
     options: [
-      { text: "Usa a coleta seletiva da escola!", healthChange: 10, response: "Excelente! Vou levar para a lixeira reciclável." },
-      { text: "Joga no lixo comum mesmo.", healthChange: -10, response: "Que pena, vai direto para o aterro sanitário." }
+      { text: "Organizar um resgate seguro em equipa.", healthChange: 15, suppliesChange: 10, response: "Conseguiram recuperar os mantimentos sem vítimas!" },
+      { text: "Ir sozinho rapidamente antes que desmorone.", healthChange: -25, suppliesChange: -10, response: "O teto cedeu parcialmente! O Arlo ficou ferido." }
     ],
     solved: false
   }
@@ -121,8 +122,7 @@ function atualizarJogador() {
 function atualizarNPCs() {
   for (let npc of npcs) {
     npc.moveTimer++;
-    // Muda de direção aleatoriamente de tempos a tempos
-    if (npc.moveTimer > 80 + Math.random() * 50) {
+    if (npc.moveTimer > 70 + Math.random() * 40) {
       npc.moveTimer = 0;
       const dirs = [[1,0], [-1,0], [0,1], [0,-1], [0,0]];
       const d = dirs[Math.floor(Math.random() * dirs.length)];
@@ -130,11 +130,10 @@ function atualizarNPCs() {
       npc.vy = d[1];
     }
 
-    // Movimento com colisão nas bordas
-    if (npc.x + npc.vx * 0.8 > 0 && npc.x + npc.vx * 0.8 < canvas.width - npc.width) npc.x += npc.vx * 0.8;
+    if (npc.x + npc.vx * 0.7 > 0 && npc.x + npc.vx * 0.7 < canvas.width - npc.width) npc.x += npc.vx * 0.7;
     else npc.vx *= -1;
 
-    if (npc.y + npc.vy * 0.8 > 0 && npc.y + npc.vy * 0.8 < canvas.height - npc.height) npc.y += npc.vy * 0.8;
+    if (npc.y + npc.vy * 0.7 > 0 && npc.y + npc.vy * 0.7 < canvas.height - npc.height) npc.y += npc.vy * 0.7;
     else npc.vy *= -1;
   }
 }
@@ -175,12 +174,19 @@ function abrirDialogo(npc) {
 
 function responderNPC(npc, opcao) {
   health = Math.max(0, Math.min(100, health + opcao.healthChange));
+  supplies = Math.max(0, Math.min(100, supplies + opcao.suppliesChange));
+
+  document.getElementById('health-bar').style.width = health + '%';
   document.getElementById('health-val').innerText = health + '%';
+
+  document.getElementById('supplies-bar').style.width = supplies + '%';
+  document.getElementById('supplies-val').innerText = supplies + '%';
+
   npc.solved = true;
 
   document.getElementById('npc-text').innerText = `${opcao.response}`;
   document.getElementById('dialog-options').innerHTML = `
-    <button class="btn-oasis" onclick="fecharDialogo()">Continuar a explorar</button>
+    <button class="btn-oasis" onclick="fecharDialogo()">Continuar exploração</button>
   `;
 }
 
@@ -188,22 +194,21 @@ function fecharDialogo() {
   document.getElementById('dialog-box').style.display = 'none';
 }
 
-// Desenha bonecos animados em pixel art
 function desenharBoneco(x, y, width, height, skinColor, shirtColor, isMoving, isNPC = false) {
   const legOffset = isMoving ? Math.sin(animFrame * 0.2) * 3 : 0;
 
   // Sombra
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.beginPath();
   ctx.ellipse(x + width/2, y + height - 2, 8, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // Pernas
-  ctx.fillStyle = '#222';
+  ctx.fillStyle = '#111';
   ctx.fillRect(x + 3, y + 18, 5, 8 + legOffset);
   ctx.fillRect(x + 12, y + 18, 5, 8 - legOffset);
 
-  // Camisa / Corpo
+  // Roupa de Sobrevivente
   ctx.fillStyle = shirtColor;
   ctx.fillRect(x + 2, y + 8, 16, 10);
 
@@ -216,32 +221,57 @@ function desenharBoneco(x, y, width, height, skinColor, shirtColor, isMoving, is
   ctx.fillRect(x + 5, y + 3, 3, 3);
   ctx.fillRect(x + 12, y + 3, 3, 3);
 
-  // Efeito de destaque para NPCs com missão
+  // Indicador de PNJ
   if (isNPC) {
-    ctx.fillStyle = '#ffe600';
+    ctx.fillStyle = '#ffcc00';
     ctx.font = '10px "Press Start 2P"';
     ctx.fillText('!', x + 7, y - 5);
   }
 }
 
-function desenhar() {
-  ctx.fillStyle = '#050a14';
+function desenharCenarioDevastado() {
+  // Solo Árido
+  ctx.fillStyle = '#261b13';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Grelha do chão
-  ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
+  // Rachaduras do solo
+  ctx.strokeStyle = 'rgba(60, 40, 25, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(50, 80); ctx.lineTo(120, 150); ctx.lineTo(90, 220);
+  ctx.moveTo(350, 40); ctx.lineTo(400, 180); ctx.lineTo(520, 200);
+  ctx.moveTo(200, 300); ctx.lineTo(280, 370);
+  ctx.stroke();
+
+  // Árvores Secas / Mortas
+  const arvoresMortas = [{x: 80, y: 50}, {x: 520, y: 80}, {x: 150, y: 320}, {x: 480, y: 310}];
+  for (let a of arvoresMortas) {
+    ctx.strokeStyle = '#150d09';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y + 20); ctx.lineTo(a.x, a.y);
+    ctx.lineTo(a.x - 10, a.y - 12);
+    ctx.moveTo(a.x, a.y - 5); ctx.lineTo(a.x + 10, a.y - 15);
+    ctx.stroke();
+  }
+
+  // Poça Tóxica
+  ctx.fillStyle = 'rgba(0, 255, 100, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(320, 200, 40, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#00ff66';
   ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 30) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += 30) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-  }
+  ctx.stroke();
+}
+
+function desenhar() {
+  desenharCenarioDevastado();
 
   // Desenhar NPCs
   for (let npc of npcs) {
     const isMoving = npc.vx !== 0 || npc.vy !== 0;
-    desenharBoneco(npc.x, npc.y, npc.width, npc.height, npc.skinColor, npc.solved ? '#555' : npc.shirtColor, isMoving, !npc.solved);
+    desenharBoneco(npc.x, npc.y, npc.width, npc.height, npc.skinColor, npc.solved ? '#444' : npc.shirtColor, isMoving, !npc.solved);
   }
 
   // Desenhar Jogador

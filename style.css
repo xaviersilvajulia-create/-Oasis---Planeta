@@ -5,13 +5,13 @@
 }
 
 body {
-  background-color: #080711;
+  background-color: #050406;
   background-image: 
-    radial-gradient(ellipse at center, rgba(16, 26, 58, 0.8) 0%, rgba(5, 4, 10, 0.95) 100%),
-    linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
+    radial-gradient(ellipse at center, rgba(35, 15, 10, 0.8) 0%, rgba(5, 4, 6, 0.95) 100%),
+    linear-gradient(rgba(255, 60, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 60, 0, 0.05) 1px, transparent 1px);
   background-size: 100% 100%, 30px 30px, 30px 30px;
-  color: #00f3ff;
+  color: #ff5500;
   font-family: 'Rajdhani', sans-serif;
   display: flex;
   justify-content: center;
@@ -23,9 +23,9 @@ body {
 .vr-hud {
   width: 100%;
   max-width: 650px;
-  border: 2px solid #00f3ff;
-  box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
-  background: rgba(10, 15, 30, 0.95);
+  border: 2px solid #ff5500;
+  box-shadow: 0 0 20px rgba(255, 85, 0, 0.3);
+  background: rgba(15, 10, 8, 0.95);
   border-radius: 8px;
   padding: 20px;
 }
@@ -38,20 +38,71 @@ body {
 h1 {
   font-family: 'Press Start 2P', cursive;
   font-size: 1rem;
-  color: #ff0055;
-  text-shadow: 0 0 10px #ff0055;
+  color: #ff0033;
+  text-shadow: 0 0 10px #ff0033;
   margin-bottom: 6px;
 }
 
 .subtitle {
   font-size: 0.85rem;
   letter-spacing: 1px;
-  color: #ffe600;
+  color: #ffcc00;
 }
 
 .player-highlight {
-  color: #00f3ff;
+  color: #ff5500;
   font-weight: bold;
+}
+
+/* Status Bars */
+.status-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.status-label {
+  font-size: 0.75rem;
+  font-family: 'Press Start 2P', cursive;
+  width: 130px;
+  color: #ffcc00;
+}
+
+.bar-outer {
+  flex-grow: 1;
+  height: 14px;
+  background: #111;
+  border: 1px solid #ff5500;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-inner {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.bar-inner.health {
+  background: linear-gradient(90deg, #ff0033, #ff5500);
+}
+
+.bar-inner.supplies {
+  background: linear-gradient(90deg, #ffcc00, #00ff88);
+}
+
+.status-val {
+  width: 45px;
+  text-align: right;
+  font-weight: bold;
+  font-size: 0.9rem;
 }
 
 /* Login */
@@ -65,12 +116,12 @@ h1 {
 .login-label {
   font-family: 'Press Start 2P', cursive;
   font-size: 0.7rem;
-  color: #ffe600;
+  color: #ffcc00;
 }
 
 #player-name-input {
-  background: rgba(0, 0, 0, 0.6);
-  border: 2px solid #00f3ff;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid #ff5500;
   color: #fff;
   padding: 10px;
   font-family: 'Rajdhani', sans-serif;
@@ -80,20 +131,21 @@ h1 {
 }
 
 .btn-oasis {
-  background: rgba(0, 243, 255, 0.1);
-  border: 1px solid #00f3ff;
+  background: rgba(255, 85, 0, 0.15);
+  border: 1px solid #ff5500;
   color: #fff;
   padding: 10px;
   font-family: 'Rajdhani', sans-serif;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: left;
 }
 
 .btn-oasis:hover {
-  background: #00f3ff;
+  background: #ff5500;
   color: #000;
-  box-shadow: 0 0 10px #00f3ff;
+  box-shadow: 0 0 10px #ff5500;
 }
 
 /* Canvas */
@@ -106,21 +158,21 @@ h1 {
 }
 
 canvas {
-  background: #050a14;
-  border: 2px solid #00f3ff;
+  background: #1a120c;
+  border: 2px solid #ff5500;
   border-radius: 4px;
   width: 100%;
   max-width: 600px;
   height: auto;
-  box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.2);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
 }
 
 .prompt-box {
   position: absolute;
   bottom: 15px;
   background: rgba(0, 0, 0, 0.9);
-  border: 1px solid #ffe600;
-  color: #ffe600;
+  border: 1px solid #ffcc00;
+  color: #ffcc00;
   padding: 8px 14px;
   font-family: 'Press Start 2P', cursive;
   font-size: 0.65rem;
@@ -128,24 +180,24 @@ canvas {
 }
 
 .key-highlight {
-  color: #ff0055;
+  color: #ff0033;
   font-weight: bold;
 }
 
 /* Diálogo */
 .dialog-card {
-  border: 1px solid #ff0055;
-  background: rgba(10, 5, 20, 0.95);
+  border: 1px solid #ff0033;
+  background: rgba(20, 5, 5, 0.95);
   padding: 15px;
   border-radius: 5px;
   margin-bottom: 10px;
-  box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+  box-shadow: 0 0 15px rgba(255, 0, 51, 0.3);
 }
 
 .npc-title {
   font-family: 'Press Start 2P', cursive;
   font-size: 0.75rem;
-  color: #ffe600;
+  color: #ffcc00;
   margin-bottom: 8px;
 }
 
@@ -165,5 +217,5 @@ canvas {
 .control-hint {
   text-align: center;
   font-size: 0.8rem;
-  color: #aaa;
+  color: #888;
 }

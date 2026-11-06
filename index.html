@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OASIS // RPG Ecológico</title>
+  <title>OASIS // Protocolo Sobrevivência</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 </head>
@@ -11,33 +11,47 @@
   <!-- TELA DE LOGIN -->
   <div id="login-screen" class="vr-hud">
     <header class="hud-header">
-      <h1 class="glitch">OASIS // CONEXÃO</h1>
-      <p class="subtitle">REGISTO DE NOVO JOGADOR</p>
+      <h1 class="glitch">OASIS // SOBREVIVÊNCIA</h1>
+      <p class="subtitle">TERRA DEVASTADA - ANO 2088</p>
     </header>
     <div class="login-box">
-      <label for="player-name-input" class="login-label">DIGITA O TEU NICKNAME:</label>
+      <label for="player-name-input" class="login-label">NOME DO SOBREVIVENTE:</label>
       <input type="text" id="player-name-input" placeholder="Ex: Parzival, Art3mis..." maxlength="15">
-      <button class="btn-oasis btn-start" onclick="iniciarJogo()">ENTRAR NO OASIS</button>
+      <button class="btn-oasis btn-start" onclick="iniciarJogo()">INICIAR PROTOCOLO</button>
     </div>
   </div>
 
   <!-- INTERFACE PRINCIPAL DO JOGO -->
   <div id="game-screen" class="vr-hud" style="display: none;">
     <header class="hud-header">
-      <h1 class="glitch">OASIS // CIDADE VIVA</h1>
-      <p class="subtitle">JOGADOR: <span id="display-player-name" class="player-highlight">---</span> | SAÚDE DA CIDADE: <span id="health-val">100%</span></p>
+      <h1 class="glitch">ZONA DE QUARENTENA</h1>
+      <p class="subtitle">SOBREVIVENTE: <span id="display-player-name" class="player-highlight">---</span></p>
     </header>
+
+    <!-- STATUS DE SOBREVIVÊNCIA -->
+    <div class="status-container">
+      <div class="status-box">
+        <span class="status-label">SAÚDE:</span>
+        <div class="bar-outer"><div id="health-bar" class="bar-inner health" style="width: 100%;"></div></div>
+        <span id="health-val" class="status-val">100%</span>
+      </div>
+      <div class="status-box">
+        <span class="status-label">SUPRIMENTOS:</span>
+        <div class="bar-outer"><div id="supplies-bar" class="bar-inner supplies" style="width: 80%;"></div></div>
+        <span id="supplies-val" class="status-val">80%</span>
+      </div>
+    </div>
 
     <div class="canvas-container">
       <canvas id="gameCanvas" width="600" height="400"></canvas>
       <div id="interaction-prompt" class="prompt-box" style="display: none;">
-        Pressiona <span class="key-highlight">[E]</span> ou <span class="key-highlight">[ESPAÇO]</span> para conversar
+        Pressiona <span class="key-highlight">[E]</span> ou <span class="key-highlight">[ESPAÇO]</span> para interagir
       </div>
     </div>
 
-    <!-- CAIXA DE DIÁLOGO -->
+    <!-- CAIXA DE DIÁLOGO / DECISÕES -->
     <div id="dialog-box" class="dialog-card" style="display: none;">
-      <h3 id="npc-name" class="npc-title">Cidadão</h3>
+      <h3 id="npc-name" class="npc-title">Sobrevivente</h3>
       <p id="npc-text" class="npc-message">...</p>
       <div id="dialog-options" class="options-grid"></div>
     </div>
