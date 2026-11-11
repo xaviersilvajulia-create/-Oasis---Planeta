@@ -17,7 +17,7 @@ html, body {
   display: block;
   width: 100vw;
   height: 100vh;
-  background: #0d0907;
+  background: #0b0806;
 }
 
 #game-ui {
@@ -52,6 +52,26 @@ html, body {
 
 .stat-badge.danger { color: #ff0033; }
 .stat-badge.warning { color: #ffcc00; }
+
+.item-popup {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 255, 136, 0.9);
+  color: #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  padding: 8px 16px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px #00ff88;
+  animation: popAnim 0.3s ease-out;
+}
+
+@keyframes popAnim {
+  0% { transform: translate(-50%, -10px); opacity: 0; }
+  100% { transform: translate(-50%, 0); opacity: 1; }
+}
 
 .prompt-box {
   position: absolute;
