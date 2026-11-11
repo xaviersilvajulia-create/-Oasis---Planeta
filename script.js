@@ -1,17 +1,15 @@
-let canvas, ctx;
+let canvas, ctx, miniCanvas, miniCtx;
 let playerName = "Sobrevivente";
 let lifeYears = 40;
 let supplies = 70;
 let activeNPC = null;
+let activeItem = null;
 let inDialog = false;
 let animFrame = 0;
 let flashDamage = 0;
+let isGameOver = false;
 
-// TAMANHO DO MUNDO EXPANDIDO (Mundo Aberto)
-const WORLD_WIDTH = 2400;
-const WORLD_HEIGHT = 1800;
-
-// CAMÉRA
+// CÂMERA E MUNDO INFINITO
 const camera = { x: 0, y: 0 };
 
 // JOGADOR
@@ -24,32 +22,37 @@ const player = {
   skinColor: '#ffcc99',
   shirtColor: '#224466',
   pantsColor: '#111822',
-  isMoving: false
+  isMoving: false,
+  inShelter: false
 };
 
 const keys = {};
 
-// PARTÍCULAS DE NÉVOA TÓXICA
-const particles = [];
-for (let i = 0; i < 60; i++) {
-  particles.push({
-    x: Math.random() * WORLD_WIDTH,
-    y: Math.random() * WORLD_HEIGHT,
-    size: Math.random() * 2 + 1,
-    speedX: Math.random() * 0.4 - 0.2,
-    speedY: Math.random() * 0.3 + 0.1
-  });
-}
-
-// SUPRIMENTOS RECOLHÍVEIS PELO MAPA
-const itemsOnGround = [
-  { id: 1, x: 1000, y: 850, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
-  { id: 2, x: 1400, y: 1100, type: 'food', name: 'Ração Militar em Lata', years: 2, supp: 15, collected: false },
-  { id: 3, x: 700, y: 500, type: 'med', name: 'Kit de Primeiros Socorros', years: 5, supp: 5, collected: false },
-  { id: 4, x: 1800, y: 1300, type: 'water', name: 'Galão de Água Filtrada', years: 4, supp: 15, collected: false }
+// ESCONDERIJOS (CASAS EM RUÍNAS)
+const shelters = [
+  { x: 1000, y: 700, width: 140, height: 110, name: "Casa em Ruínas A" },
+  { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker Destruído" },
+  { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
 ];
 
-// SOBREVIVENTES (DECISÕES CEGAS - SEM REVELAR VALORES ANTES)
+// OBSTÁCULOS E ESTRUTURAS DE RUÍNAS (COM COLISÃO DESVIÁVEL)
+const ruins = [
+  { x: 800, y: 1100, w: 90, h: 90, label: "Prédio em Ruínas" },
+  { x: 1500, y: 600, w: 120, h: 80, label: "Torre Caída" },
+  { x: 600, y: 600, w: 70, h: 70, label: "Escombros" },
+  { x: 1300, y: 1500, w: 110, h: 100, label: "Construção Quebrada" },
+  { x: 1100, y: 1000, w: 80, h: 60, label: "Carro Destruído" }
+];
+
+// SUPRIMENTOS NO CHÃO
+const itemsOnGround = [
+  { id: 1, x: 1150, y: 880, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
+  { id: 2, x: 1450, y: 1100, type: 'food', name: 'Ração Militar em Lata', years: 2, supp: 15, collected: false },
+  { id: 3, x: 750, y: 550, type: 'med', name: 'Kit de Primeiros Socorros', years: 5, supp: 5, collected: false },
+  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Galão de Água Filtrada', years: 4, supp: 15, collected: false }
+];
+
+// SOBREVIVENTES (NPCs COM DECISÕES CEGAS)
 const npcs = [
   {
     id: 1,
@@ -65,18 +68,18 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Encontramos uma poça com água acumulada da chuva, mas está turva e perto de poeira tóxica. O grupo tem muita sede. O que fazemos?",
+    dialog: "Encontramos uma poça com água acumulada da chuva perto das ruínas. O grupo tem muita sede. O que fazemos?",
     options: [
-      { text: "Beber a água diretamente para aliviar a desidratação imediata.", years: -6, supp: 5, resp: "A água estava contaminada! Contraíste uma infecção forte e perdeste anos de vida." },
-      { text: "Ferver e filtrar com o pano antes de beber qualquer gole.", years: 4, supp: 10, resp: "Boa escolha! A filtragem purificou a água e garantiu hidratação segura." }
+      { text: "Beber a água diretamente para aliviar a desidratação.", years: -8, supp: 5, resp: "A água estava contaminada! Perdeste 8 anos de vida por infecção." },
+      { text: "Ferver e filtrar com o pano antes de beber qualquer gole.", years: 4, supp: 10, resp: "Fizeste uma boa escolha! A água purificada recuperou a tua saúde." }
     ],
     solved: false
   },
   {
     id: 2,
     name: "Doutora Elena",
-    x: 800,
-    y: 1200,
+    x: 850,
+    y: 1250,
     width: 24,
     height: 36,
     skinColor: '#ffdbac',
@@ -86,21 +89,21 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Um bando de saqueadores abandonou uma caixa lacrada na zona vermelha. Pode conter remédios ou ser uma armadilha com zumbis.",
+    dialog: "Uma caixa de suprimentos caiu dentro do prédio destruído. Pode ter remédios ou ser perigosa.",
     options: [
-      { text: "Investigar e abrir a caixa com cuidado.", years: 5, supp: 15, resp: "Tiveste sorte! A caixa continha suprimentos médicos intactos." },
-      { text: "Ignorar a caixa e focar na rota segura de evacuação.", years: -2, supp: 0, resp: "Evitaste perigos, mas o cansaço do caminho extra desgastou a tua saúde." }
+      { text: "Entrar com cuidado para resgatar a caixa.", years: 5, supp: 15, resp: "Encontraste medicamentos intactos entre as ruínas!" },
+      { text: "Ignorar a caixa para não arriscar um desabamento.", years: -3, supp: 0, resp: "Evitaste o perigo, mas o desgaste do caminho extra custou tempo de vida." }
     ],
     solved: false
   }
 ];
 
-// ZUMBIS PERSEGUIDORES (IA DE ATALHO AO JOGADOR)
+// ZUMBIS PERSEGUIDORES
 const zombies = [
-  { x: 1600, y: 900, width: 24, height: 36, speed: 2.1 },
-  { x: 900, y: 600, width: 24, height: 36, speed: 1.9 },
-  { x: 1100, y: 1400, width: 24, height: 36, speed: 2.2 },
-  { x: 500, y: 900, width: 24, height: 36, speed: 2.0 }
+  { x: 1600, y: 900, width: 24, height: 36, speed: 2.2 },
+  { x: 900, y: 600, width: 24, height: 36, speed: 2.0 },
+  { x: 1100, y: 1400, width: 24, height: 36, speed: 2.3 },
+  { x: 500, y: 900, width: 24, height: 36, speed: 2.1 }
 ];
 
 function redimensionarCanvas() {
@@ -118,14 +121,20 @@ function iniciarJogo() {
 
   canvas = document.getElementById('gameCanvas');
   ctx = canvas.getContext('2d');
+
+  miniCanvas = document.getElementById('minimapCanvas');
+  miniCtx = miniCanvas.getContext('2d');
   
   redimensionarCanvas();
   window.addEventListener('resize', redimensionarCanvas);
 
   window.addEventListener('keydown', e => {
-    keys[e.key.toLowerCase()] = true;
-    if (['e', ' '].includes(e.key.toLowerCase()) && activeNPC && !inDialog) {
-      abrirDialogo(activeNPC);
+    const k = e.key.toLowerCase();
+    keys[k] = true;
+
+    if (['e', ' '].includes(k) && !inDialog && !isGameOver) {
+      if (activeNPC) abrirDialogo(activeNPC);
+      else if (activeItem) coletarItem(activeItem);
     }
   });
 
@@ -134,39 +143,96 @@ function iniciarJogo() {
   requestAnimationFrame(gameLoop);
 }
 
+function reiniciarJogo() {
+  lifeYears = 40;
+  supplies = 70;
+  player.x = 1200;
+  player.y = 900;
+  isGameOver = false;
+
+  document.getElementById('life-span').innerText = lifeYears + ' Anos';
+  document.getElementById('supplies-val').innerText = supplies + '%';
+  document.getElementById('game-over-screen').style.display = 'none';
+
+  itemsOnGround.forEach(i => i.collected = false);
+  npcs.forEach(n => n.solved = false);
+
+  requestAnimationFrame(gameLoop);
+}
+
 function gameLoop() {
+  if (isGameOver) return;
+
   animFrame++;
 
   if (!inDialog) {
     atualizarJogador();
+    atualizarEsconderijo();
     atualizarNPCs();
     atualizarZumbis();
-    verificarColetaItens();
-    verificarProximidade();
+    verificarInteracoes();
     verificarAtaqueZumbi();
+    verificarMorte();
   }
 
   atualizarCamera();
   desenhar();
-  requestAnimationFrame(gameLoop);
+  desenharMinimapa();
+
+  if (!isGameOver) {
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+// SISTEMA DE COLISÃO COM ESTRUTURAS E RUÍNAS
+function checarColisaoRuin(nextX, nextY) {
+  for (let r of ruins) {
+    if (
+      nextX < r.x + r.w &&
+      nextX + player.width > r.x &&
+      nextY < r.y + r.h &&
+      nextY + player.height > r.y
+    ) {
+      return true; // Colidiu, bloqueia o movimento
+    }
+  }
+  return false;
 }
 
 function atualizarJogador() {
   player.isMoving = false;
-  if (keys['w'] || keys['arrowup']) { if (player.y > 0) player.y -= player.speed; player.isMoving = true; }
-  if (keys['s'] || keys['arrowdown']) { if (player.y < WORLD_HEIGHT - player.height) player.y += player.speed; player.isMoving = true; }
-  if (keys['a'] || keys['arrowleft']) { if (player.x > 0) player.x -= player.speed; player.isMoving = true; }
-  if (keys['d'] || keys['arrowright']) { if (player.x < WORLD_WIDTH - player.width) player.x += player.speed; player.isMoving = true; }
+  let nextX = player.x;
+  let nextY = player.y;
+
+  if (keys['w'] || keys['arrowup']) { nextY -= player.speed; player.isMoving = true; }
+  if (keys['s'] || keys['arrowdown']) { nextY += player.speed; player.isMoving = true; }
+  if (keys['a'] || keys['arrowleft']) { nextX -= player.speed; player.isMoving = true; }
+  if (keys['d'] || keys['arrowright']) { nextX += player.speed; player.isMoving = true; }
+
+  // Aplica o movimento apenas se não houver colisão
+  if (!checarColisaoRuin(nextX, player.y)) player.x = nextX;
+  if (!checarColisaoRuin(player.x, nextY)) player.y = nextY;
 }
 
 function atualizarCamera() {
-  // Mantém a câmera centralizada no jogador
   camera.x = player.x + player.width / 2 - canvas.width / 2;
   camera.y = player.y + player.height / 2 - canvas.height / 2;
+}
 
-  // Trava a câmera nos limites do mundo expandido
-  camera.x = Math.max(0, Math.min(camera.x, WORLD_WIDTH - canvas.width));
-  camera.y = Math.max(0, Math.min(camera.y, WORLD_HEIGHT - canvas.height));
+function atualizarEsconderijo() {
+  player.inShelter = false;
+  for (let s of shelters) {
+    if (
+      player.x > s.x && player.x < s.x + s.width &&
+      player.y > s.y && player.y < s.y + s.height
+    ) {
+      player.inShelter = true;
+      break;
+    }
+  }
+
+  const safeBadge = document.getElementById('status-safe');
+  if (safeBadge) safeBadge.style.display = player.inShelter ? 'inline-block' : 'none';
 }
 
 function atualizarNPCs() {
@@ -181,47 +247,65 @@ function atualizarNPCs() {
       npc.vx = d[0];
       npc.vy = d[1];
     }
-
-    if (npc.x + npc.vx > 0 && npc.x + npc.vx < WORLD_WIDTH - npc.width) npc.x += npc.vx * 0.7;
-    else npc.vx *= -1;
-
-    if (npc.y + npc.vy > 0 && npc.y + npc.vy < WORLD_HEIGHT - npc.height) npc.y += npc.vy * 0.7;
-    else npc.vy *= -1;
+    npc.x += npc.vx * 0.7;
+    npc.y += npc.vy * 0.7;
   }
 }
 
-// ZUMBIS CORREM ATRÁS DO SOBREVIVENTE
 function atualizarZumbis() {
+  if (player.inShelter) return;
+
   for (let z of zombies) {
     const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
     const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
     const dist = Math.hypot(dx, dy);
 
-    // Se o jogador estiver num raio de visão (380px), o zumbi avança!
-    if (dist < 380) {
+    if (dist < 450) {
       z.x += (dx / dist) * z.speed;
       z.y += (dy / dist) * z.speed;
     }
   }
 }
 
-// RECOLHER ÁGUA E SUPRIMENTOS NO CHÃO
-function verificarColetaItens() {
-  for (let item of itemsOnGround) {
-    if (item.collected) continue;
+function verificarInteracoes() {
+  activeNPC = null;
+  activeItem = null;
+  const prompt = document.getElementById('interaction-prompt');
 
-    const dist = Math.hypot((player.x + player.width / 2) - item.x, (player.y + player.height / 2) - item.y);
-    if (dist < 28) {
-      item.collected = true;
-      lifeYears = Math.min(100, lifeYears + item.years);
-      supplies = Math.min(100, supplies + item.supp);
-
-      document.getElementById('life-span').innerText = lifeYears + ' Anos';
-      document.getElementById('supplies-val').innerText = supplies + '%';
-
-      mostrarPopupItem(`+${item.years} Anos: ${item.name}!`);
+  for (let npc of npcs) {
+    const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
+    if (dist < 50 && !npc.solved) {
+      activeNPC = npc;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para conversar com ${npc.name}`;
+      prompt.style.display = 'block';
+      return;
     }
   }
+
+  for (let item of itemsOnGround) {
+    if (item.collected) continue;
+    const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
+    if (dist < 35) {
+      activeItem = item;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.name}`;
+      prompt.style.display = 'block';
+      return;
+    }
+  }
+
+  prompt.style.display = 'none';
+}
+
+function coletarItem(item) {
+  item.collected = true;
+  lifeYears = Math.min(100, lifeYears + item.years);
+  supplies = Math.min(100, supplies + item.supp);
+
+  document.getElementById('life-span').innerText = lifeYears + ' Anos';
+  document.getElementById('supplies-val').innerText = supplies + '%';
+
+  mostrarPopupItem(`+${item.years} Anos: ${item.name}!`);
+  activeItem = null;
 }
 
 function mostrarPopupItem(texto) {
@@ -231,30 +315,23 @@ function mostrarPopupItem(texto) {
   setTimeout(() => { pop.style.display = 'none'; }, 2500);
 }
 
-function verificarProximidade() {
-  let perto = false;
-  activeNPC = null;
-
-  for (let npc of npcs) {
-    const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
-    if (dist < 50 && !npc.solved) {
-      perto = true;
-      activeNPC = npc;
-      break;
-    }
-  }
-
-  document.getElementById('interaction-prompt').style.display = perto ? 'block' : 'none';
-}
-
 function verificarAtaqueZumbi() {
+  if (player.inShelter) return;
+
   for (let z of zombies) {
     const dist = Math.hypot((player.x + player.width/2) - (z.x + z.width/2), (player.y + player.height/2) - (z.y + z.height/2));
     if (dist < 22) {
-      lifeYears = Math.max(0, lifeYears - 1);
-      flashDamage = 5;
+      lifeYears = Math.max(0, lifeYears - 2);
+      flashDamage = 6;
       document.getElementById('life-span').innerText = lifeYears + ' Anos';
     }
+  }
+}
+
+function verificarMorte() {
+  if (lifeYears <= 0 && !isGameOver) {
+    isGameOver = true;
+    document.getElementById('game-over-screen').style.display = 'flex';
   }
 }
 
@@ -272,7 +349,7 @@ function abrirDialogo(npc) {
   npc.options.forEach(opt => {
     const btn = document.createElement('button');
     btn.className = 'btn-oasis';
-    btn.innerText = opt.text; // Sem mostrar spoilers de +5 ou -5 anos!
+    btn.innerText = opt.text;
     btn.onclick = () => responderNPC(npc, opt);
     grid.appendChild(btn);
   });
@@ -290,6 +367,8 @@ function responderNPC(npc, opcao) {
   document.getElementById('dialog-options').innerHTML = `
     <button class="btn-oasis" onclick="fecharDialogo()">Voltar ao Território</button>
   `;
+
+  verificarMorte();
 }
 
 function fecharDialogo() {
@@ -298,23 +377,49 @@ function fecharDialogo() {
   document.getElementById('dialog-box').style.display = 'none';
 }
 
+function desenharCenario() {
+  for (let s of shelters) {
+    const sx = s.x - camera.x;
+    const sy = s.y - camera.y;
+
+    ctx.fillStyle = 'rgba(40, 20, 15, 0.85)';
+    ctx.fillRect(sx, sy, s.width, s.height);
+
+    ctx.strokeStyle = '#ff5500';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, sy, s.width, s.height);
+
+    ctx.fillStyle = '#00ff88';
+    ctx.font = '9px "Press Start 2P"';
+    ctx.fillText('ESCONDERIJO', sx + 8, sy + 18);
+  }
+
+  for (let r of ruins) {
+    const rx = r.x - camera.x;
+    const ry = r.y - camera.y;
+
+    ctx.fillStyle = '#1e1410';
+    ctx.fillRect(rx, ry, r.w, r.h);
+
+    ctx.strokeStyle = '#553c2e';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rx, ry, r.w, r.h);
+  }
+}
+
 function desenharItemChao(item) {
   if (item.collected) return;
   const screenX = item.x - camera.x;
   const screenY = item.y - camera.y;
 
-  // Brilho sob o item
   ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.4)' : 'rgba(255, 200, 0, 0.4)';
   ctx.beginPath();
   ctx.arc(screenX, screenY, 10, 0, Math.PI * 2);
   ctx.fill();
 
-  // Ícone Pixel Art do Item
   if (item.type === 'water') {
     ctx.fillStyle = '#00ccff';
     ctx.fillRect(screenX - 3, screenY - 6, 6, 12);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(screenX - 2, screenY - 8, 4, 2);
   } else {
     ctx.fillStyle = '#ff9900';
     ctx.fillRect(screenX - 5, screenY - 5, 10, 10);
@@ -325,33 +430,27 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
 
-  // Renderizar apenas se estiver visível na janela da câmera
   if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) return;
 
   const legOffset = isMoving ? Math.sin(animFrame * 0.25) * 4 : 0;
   const armOffset = isMoving ? Math.cos(animFrame * 0.25) * 3 : 0;
 
-  // Sombra
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.beginPath();
   ctx.ellipse(screenX + 12, screenY + 34, 10, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Pernas
   ctx.fillStyle = isZombie ? '#1c2618' : (char.pantsColor || '#111');
   ctx.fillRect(screenX + 4, screenY + 22, 6, 12 + legOffset);
   ctx.fillRect(screenX + 14, screenY + 22, 6, 12 - legOffset);
 
-  // Corpo
   ctx.fillStyle = isZombie ? '#2e4226' : char.shirtColor;
   ctx.fillRect(screenX + 3, screenY + 10, 18, 13);
-  
-  // Braços
+
   ctx.fillStyle = isZombie ? '#3b5431' : char.shirtColor;
   ctx.fillRect(screenX - 1, screenY + 11 + armOffset, 4, 10);
   ctx.fillRect(screenX + 21, screenY + 11 - armOffset, 4, 10);
 
-  // Cabeça
   ctx.fillStyle = isZombie ? '#4d6e40' : char.skinColor;
   ctx.fillRect(screenX + 4, screenY, 16, 11);
 
@@ -360,12 +459,10 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     ctx.fillRect(screenX + 4, screenY, 16, 3);
   }
 
-  // Olhos
   ctx.fillStyle = isZombie ? '#ff0000' : '#000';
   ctx.fillRect(screenX + 7, screenY + 4, 3, 3);
   ctx.fillRect(screenX + 14, screenY + 4, 3, 3);
 
-  // Indicador NPC
   if (isNPC) {
     ctx.fillStyle = '#ffcc00';
     ctx.font = '12px "Press Start 2P"';
@@ -373,33 +470,55 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   }
 }
 
+// RENDERING CORRIGIDO DO MINIMAPA
+function desenharMinimapa() {
+  if (!miniCtx) return;
+
+  const mw = miniCanvas.width;
+  const mh = miniCanvas.height;
+  const scale = 0.04;
+
+  miniCtx.fillStyle = '#050302';
+  miniCtx.fillRect(0, 0, mw, mh);
+
+  const cx = mw / 2;
+  const cy = mh / 2;
+
+  // Esconderijos (Pontos Verdes)
+  miniCtx.fillStyle = '#00ff88';
+  for (let s of shelters) {
+    const mx = cx + (s.x - player.x) * scale;
+    const my = cy + (s.y - player.y) * scale;
+    miniCtx.fillRect(mx - 3, my - 3, 6, 6);
+  }
+
+  // Zumbis (Pontos Vermelhos)
+  miniCtx.fillStyle = '#ff0033';
+  for (let z of zombies) {
+    const mx = cx + (z.x - player.x) * scale;
+    const my = cy + (z.y - player.y) * scale;
+    miniCtx.fillRect(mx - 2, my - 2, 4, 4);
+  }
+
+  // Jogador (Ponto Azul Central)
+  miniCtx.fillStyle = '#00ccff';
+  miniCtx.beginPath();
+  miniCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+  miniCtx.fill();
+}
+
 function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  // Lanterna focada no jogador
-  const gradient = ctx.createRadialGradient(screenPx, screenPy, 40, screenPx, screenPy, 250);
+  const gradient = ctx.createRadialGradient(screenPx, screenPy, 40, screenPx, screenPy, 260);
   gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  gradient.addColorStop(0.7, 'rgba(5, 3, 2, 0.7)');
+  gradient.addColorStop(0.75, 'rgba(5, 3, 2, 0.7)');
   gradient.addColorStop(1, 'rgba(3, 2, 1, 0.96)');
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Partículas de poeira
-  ctx.fillStyle = 'rgba(255, 180, 100, 0.3)';
-  for (let p of particles) {
-    const px = p.x - camera.x;
-    const py = p.y - camera.y;
-
-    if (px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
-      ctx.beginPath();
-      ctx.arc(px, py, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // Pisca de dano
   if (flashDamage > 0) {
     ctx.fillStyle = `rgba(255, 0, 0, ${flashDamage * 0.08})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -411,7 +530,6 @@ function desenhar() {
   ctx.fillStyle = '#0b0806';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Grelha do mundo (move-se com a câmera)
   ctx.strokeStyle = 'rgba(255, 85, 0, 0.04)';
   ctx.lineWidth = 1;
   const startX = - (camera.x % 60);
@@ -424,24 +542,21 @@ function desenhar() {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
-  // Desenhar itens no chão
+  desenharCenario();
+
   for (let item of itemsOnGround) {
     desenharItemChao(item);
   }
 
-  // Desenhar NPCs
   for (let npc of npcs) {
     desenharPersonagemDetalhado(npc.x, npc.y, npc, !npc.isTalking, false, !npc.solved);
   }
 
-  // Desenhar Zumbis
   for (let z of zombies) {
     desenharPersonagemDetalhado(z.x, z.y, z, true, true, false);
   }
 
-  // Desenhar Jogador
   desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
 
-  // Efeitos visuais
   desenharIluminacaoEClima();
 }

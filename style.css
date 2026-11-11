@@ -53,16 +53,17 @@ html, body {
 .stat-badge.warning { color: #ffcc00; }
 .stat-badge.safe { color: #00ff88; }
 
-/* MINIMAPA NO CANTO SUPERIOR DIREITO */
+/* MINIMAPA FIXO NO CANTO SUPERIOR DIREITO */
 .minimap-wrapper {
   position: absolute;
   top: 15px;
   right: 20px;
-  background: rgba(5, 5, 5, 0.85);
+  background: rgba(5, 5, 5, 0.9);
   border: 2px solid #ff5500;
   border-radius: 8px;
   padding: 4px;
   box-shadow: 0 0 15px rgba(255, 85, 0, 0.4);
+  z-index: 15;
 }
 
 #minimapCanvas {
@@ -182,7 +183,7 @@ html, body {
 .glitch-danger {
   font-family: 'Press Start 2P', cursive;
   color: #ff0033;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-bottom: 15px;
 }
 
