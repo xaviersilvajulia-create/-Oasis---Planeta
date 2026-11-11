@@ -35,13 +35,13 @@ const shelters = [
   { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
 ];
 
-// OBSTÁCULOS E ESTRUTURAS DE RUÍNAS (COM COLISÃO DESVIÁVEL)
+// ESTRUTURAS E CONSTRUÇÕES DESTRUIDAS (COM COLISÃO DESVIÁVEL)
 const ruins = [
-  { x: 800, y: 1100, w: 90, h: 90, label: "Prédio em Ruínas" },
-  { x: 1500, y: 600, w: 120, h: 80, label: "Torre Caída" },
-  { x: 600, y: 600, w: 70, h: 70, label: "Escombros" },
-  { x: 1300, y: 1500, w: 110, h: 100, label: "Construção Quebrada" },
-  { x: 1100, y: 1000, w: 80, h: 60, label: "Carro Destruído" }
+  { x: 800, y: 1100, w: 100, h: 90, label: "Prédio Quebrado" },
+  { x: 1500, y: 600, w: 130, h: 80, label: "Casa Destruída" },
+  { x: 600, y: 600, w: 80, h: 70, label: "Escombros de Pedra" },
+  { x: 1300, y: 1500, w: 110, h: 100, label: "Construção Caída" },
+  { x: 1100, y: 1000, w: 90, h: 60, label: "Veículo Abandonado" }
 ];
 
 // SUPRIMENTOS NO CHÃO
@@ -64,11 +64,11 @@ const npcs = [
     skinColor: '#d2b48c',
     shirtColor: '#664422',
     pantsColor: '#221100',
-    vx: 1,
+    vx: 0.8,
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Encontramos uma poça com água acumulada da chuva perto das ruínas. O grupo tem muita sede. O que fazemos?",
+    dialog: "Encontramos uma poça com água acumulada perto do prédio quebrado. O grupo tem sede. O que fazemos?",
     options: [
       { text: "Beber a água diretamente para aliviar a desidratação.", years: -8, supp: 5, resp: "A água estava contaminada! Perdeste 8 anos de vida por infecção." },
       { text: "Ferver e filtrar com o pano antes de beber qualquer gole.", years: 4, supp: 10, resp: "Fizeste uma boa escolha! A água purificada recuperou a tua saúde." }
@@ -85,11 +85,11 @@ const npcs = [
     skinColor: '#ffdbac',
     shirtColor: '#882222',
     pantsColor: '#331111',
-    vx: -1,
+    vx: -0.8,
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Uma caixa de suprimentos caiu dentro do prédio destruído. Pode ter remédios ou ser perigosa.",
+    dialog: "Uma caixa de suprimentos caiu dentro da casinha destruída. Pode ter remédios ou ser perigosa.",
     options: [
       { text: "Entrar com cuidado para resgatar a caixa.", years: 5, supp: 15, resp: "Encontraste medicamentos intactos entre as ruínas!" },
       { text: "Ignorar a caixa para não arriscar um desabamento.", years: -3, supp: 0, resp: "Evitaste o perigo, mas o desgaste do caminho extra custou tempo de vida." }
@@ -98,12 +98,12 @@ const npcs = [
   }
 ];
 
-// ZUMBIS PERSEGUIDORES
+// ZUMBIS COM DIREÇÃO DE PATRULHA
 const zombies = [
-  { x: 1600, y: 900, width: 24, height: 36, speed: 2.2 },
-  { x: 900, y: 600, width: 24, height: 36, speed: 2.0 },
-  { x: 1100, y: 1400, width: 24, height: 36, speed: 2.3 },
-  { x: 500, y: 900, width: 24, height: 36, speed: 2.1 }
+  { x: 1600, y: 900, width: 24, height: 36, speed: 1.3, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
+  { x: 900, y: 600, width: 24, height: 36, speed: 1.1, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
+  { x: 1100, y: 1400, width: 24, height: 36, speed: 1.2, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
+  { x: 500, y: 900, width: 24, height: 36, speed: 1.0, vx: 0, vy: 0, patrolTimer: 0, isMoving: false }
 ];
 
 function redimensionarCanvas() {
@@ -184,7 +184,6 @@ function gameLoop() {
   }
 }
 
-// SISTEMA DE COLISÃO COM ESTRUTURAS E RUÍNAS
 function checarColisaoRuin(nextX, nextY) {
   for (let r of ruins) {
     if (
@@ -193,7 +192,7 @@ function checarColisaoRuin(nextX, nextY) {
       nextY < r.y + r.h &&
       nextY + player.height > r.y
     ) {
-      return true; // Colidiu, bloqueia o movimento
+      return true;
     }
   }
   return false;
@@ -209,7 +208,6 @@ function atualizarJogador() {
   if (keys['a'] || keys['arrowleft']) { nextX -= player.speed; player.isMoving = true; }
   if (keys['d'] || keys['arrowright']) { nextX += player.speed; player.isMoving = true; }
 
-  // Aplica o movimento apenas se não houver colisão
   if (!checarColisaoRuin(nextX, player.y)) player.x = nextX;
   if (!checarColisaoRuin(player.x, nextY)) player.y = nextY;
 }
@@ -244,26 +242,47 @@ function atualizarNPCs() {
       npc.moveTimer = 0;
       const dirs = [[1,0], [-1,0], [0,1], [0,-1], [0,0]];
       const d = dirs[Math.floor(Math.random() * dirs.length)];
-      npc.vx = d[0];
-      npc.vy = d[1];
+      npc.vx = d[0] * 0.8;
+      npc.vy = d[1] * 0.8;
     }
-    npc.x += npc.vx * 0.7;
-    npc.y += npc.vy * 0.7;
+    npc.x += npc.vx;
+    npc.y += npc.vy;
   }
 }
 
+// INTELIGÊNCIA DOS ZUMBIS AJUSTADA: DISTRAEM-SE SE JOGADOR ENTRAR NO ESCONDERIJO
 function atualizarZumbis() {
-  if (player.inShelter) return;
-
   for (let z of zombies) {
     const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
     const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
     const dist = Math.hypot(dx, dy);
 
-    if (dist < 450) {
-      z.x += (dx / dist) * z.speed;
-      z.y += (dy / dist) * z.speed;
+    // Se o jogador estiver visível (FORA do esconderijo) e no raio de alcance
+    if (!player.inShelter && dist < 400) {
+      z.vx = (dx / dist) * z.speed;
+      z.vy = (dy / dist) * z.speed;
+      z.isMoving = true;
+    } else {
+      // Se entrou no esconderijo ou está longe, o zumbi fica DISTRAÍDO e anda para outro lado
+      z.patrolTimer++;
+      if (z.patrolTimer > 100 + Math.random() * 50) {
+        z.patrolTimer = 0;
+        const ang = Math.random() * Math.PI * 2;
+        // Escolhe andar devagar para longe ou parar de vez em quando
+        if (Math.random() > 0.3) {
+          z.vx = Math.cos(ang) * (z.speed * 0.5);
+          z.vy = Math.sin(ang) * (z.speed * 0.5);
+          z.isMoving = true;
+        } else {
+          z.vx = 0;
+          z.vy = 0;
+          z.isMoving = false; // Fica totalmente paralisado sem balançar pernas
+        }
+      }
     }
+
+    z.x += z.vx;
+    z.y += z.vy;
   }
 }
 
@@ -382,10 +401,10 @@ function desenharCenario() {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
 
-    ctx.fillStyle = 'rgba(40, 20, 15, 0.85)';
+    ctx.fillStyle = '#2d1d16';
     ctx.fillRect(sx, sy, s.width, s.height);
 
-    ctx.strokeStyle = '#ff5500';
+    ctx.strokeStyle = '#00ff88';
     ctx.lineWidth = 2;
     ctx.strokeRect(sx, sy, s.width, s.height);
 
@@ -398,12 +417,15 @@ function desenharCenario() {
     const rx = r.x - camera.x;
     const ry = r.y - camera.y;
 
-    ctx.fillStyle = '#1e1410';
+    ctx.fillStyle = '#3a281e';
     ctx.fillRect(rx, ry, r.w, r.h);
 
-    ctx.strokeStyle = '#553c2e';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#5a3f30';
+    ctx.lineWidth = 3;
     ctx.strokeRect(rx, ry, r.w, r.h);
+
+    ctx.fillStyle = '#18120e';
+    ctx.fillRect(rx + 10, ry + 10, r.w / 3, r.h / 3);
   }
 }
 
@@ -412,9 +434,9 @@ function desenharItemChao(item) {
   const screenX = item.x - camera.x;
   const screenY = item.y - camera.y;
 
-  ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.4)' : 'rgba(255, 200, 0, 0.4)';
+  ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.5)' : 'rgba(255, 200, 0, 0.5)';
   ctx.beginPath();
-  ctx.arc(screenX, screenY, 10, 0, Math.PI * 2);
+  ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
   ctx.fill();
 
   if (item.type === 'water') {
@@ -432,10 +454,11 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 
   if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) return;
 
+  // Só balança as pernas e braços se estiver REALMENTE se movendo
   const legOffset = isMoving ? Math.sin(animFrame * 0.25) * 4 : 0;
   const armOffset = isMoving ? Math.cos(animFrame * 0.25) * 3 : 0;
 
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.beginPath();
   ctx.ellipse(screenX + 12, screenY + 34, 10, 4, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -470,51 +493,57 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   }
 }
 
-// RENDERING CORRIGIDO DO MINIMAPA
 function desenharMinimapa() {
   if (!miniCtx) return;
 
   const mw = miniCanvas.width;
   const mh = miniCanvas.height;
-  const scale = 0.04;
+  const scale = 0.045;
 
-  miniCtx.fillStyle = '#050302';
+  miniCtx.fillStyle = '#100c09';
   miniCtx.fillRect(0, 0, mw, mh);
 
   const cx = mw / 2;
   const cy = mh / 2;
 
-  // Esconderijos (Pontos Verdes)
-  miniCtx.fillStyle = '#00ff88';
   for (let s of shelters) {
     const mx = cx + (s.x - player.x) * scale;
     const my = cy + (s.y - player.y) * scale;
+    miniCtx.fillStyle = '#000';
+    miniCtx.fillRect(mx - 4, my - 4, 8, 8);
+    miniCtx.fillStyle = '#00ff88';
     miniCtx.fillRect(mx - 3, my - 3, 6, 6);
   }
 
-  // Zumbis (Pontos Vermelhos)
-  miniCtx.fillStyle = '#ff0033';
   for (let z of zombies) {
     const mx = cx + (z.x - player.x) * scale;
     const my = cy + (z.y - player.y) * scale;
-    miniCtx.fillRect(mx - 2, my - 2, 4, 4);
+    miniCtx.fillStyle = '#ff0033';
+    miniCtx.beginPath();
+    miniCtx.arc(mx, my, 3, 0, Math.PI * 2);
+    miniCtx.fill();
+    miniCtx.strokeStyle = '#000';
+    miniCtx.lineWidth = 1;
+    miniCtx.stroke();
   }
 
-  // Jogador (Ponto Azul Central)
   miniCtx.fillStyle = '#00ccff';
   miniCtx.beginPath();
-  miniCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+  miniCtx.arc(cx, cy, 4, 0, Math.PI * 2);
   miniCtx.fill();
+  miniCtx.strokeStyle = '#ffffff';
+  miniCtx.lineWidth = 1;
+  miniCtx.stroke();
 }
 
 function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  const gradient = ctx.createRadialGradient(screenPx, screenPy, 40, screenPx, screenPy, 260);
+  const gradient = ctx.createRadialGradient(screenPx, screenPy, 80, screenPx, screenPy, 360);
   gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  gradient.addColorStop(0.75, 'rgba(5, 3, 2, 0.7)');
-  gradient.addColorStop(1, 'rgba(3, 2, 1, 0.96)');
+  gradient.addColorStop(0.75, 'rgba(10, 7, 5, 0.45)');
+  gradient.addColorStop(1, 'rgba(5, 3, 2, 0.85)');
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -527,10 +556,10 @@ function desenharIluminacaoEClima() {
 }
 
 function desenhar() {
-  ctx.fillStyle = '#0b0806';
+  ctx.fillStyle = '#18120e';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.strokeStyle = 'rgba(255, 85, 0, 0.04)';
+  ctx.strokeStyle = 'rgba(255, 85, 0, 0.06)';
   ctx.lineWidth = 1;
   const startX = - (camera.x % 60);
   const startY = - (camera.y % 60);
@@ -553,7 +582,7 @@ function desenhar() {
   }
 
   for (let z of zombies) {
-    desenharPersonagemDetalhado(z.x, z.y, z, true, true, false);
+    desenharPersonagemDetalhado(z.x, z.y, z, z.isMoving, true, false);
   }
 
   desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
