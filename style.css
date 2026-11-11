@@ -33,8 +33,7 @@ html, body {
 .hud-top {
   position: absolute;
   top: 15px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 20px;
   display: flex;
   gap: 15px;
   background: rgba(10, 5, 4, 0.85);
@@ -52,6 +51,25 @@ html, body {
 
 .stat-badge.danger { color: #ff0033; }
 .stat-badge.warning { color: #ffcc00; }
+.stat-badge.safe { color: #00ff88; }
+
+/* MINIMAPA NO CANTO SUPERIOR DIREITO */
+.minimap-wrapper {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: rgba(5, 5, 5, 0.85);
+  border: 2px solid #ff5500;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 0 15px rgba(255, 85, 0, 0.4);
+}
+
+#minimapCanvas {
+  display: block;
+  border-radius: 4px;
+  background: #050302;
+}
 
 .item-popup {
   position: absolute;
@@ -65,12 +83,6 @@ html, body {
   padding: 8px 16px;
   border-radius: 4px;
   box-shadow: 0 0 10px #00ff88;
-  animation: popAnim 0.3s ease-out;
-}
-
-@keyframes popAnim {
-  0% { transform: translate(-50%, -10px); opacity: 0; }
-  100% { transform: translate(-50%, 0); opacity: 1; }
 }
 
 .prompt-box {
@@ -160,6 +172,18 @@ html, body {
   border-radius: 8px;
   text-align: center;
   background: rgba(20, 10, 8, 0.9);
+}
+
+.danger-card {
+  border-color: #ff0033;
+  box-shadow: 0 0 30px rgba(255, 0, 51, 0.6);
+}
+
+.glitch-danger {
+  font-family: 'Press Start 2P', cursive;
+  color: #ff0033;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
 }
 
 .input-group {

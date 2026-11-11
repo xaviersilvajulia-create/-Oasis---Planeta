@@ -12,12 +12,21 @@
   <div id="login-screen" class="vr-overlay">
     <div class="login-card">
       <h1 class="glitch">OASIS // SOBREVIVÊNCIA</h1>
-      <p class="subtitle">ZONA INFECTADA - ANO 2088</p>
+      <p class="subtitle">ZONA EM RUÍNAS - ANO 2088</p>
       <div class="input-group">
         <label for="player-name-input">NOME DO SOBREVIVENTE:</label>
         <input type="text" id="player-name-input" placeholder="Ex: Parzival" maxlength="15">
         <button class="btn-oasis" onclick="iniciarJogo()">ENTRAR NA ZONA</button>
       </div>
+    </div>
+  </div>
+
+  <!-- TELA DE GAME OVER -->
+  <div id="game-over-screen" class="vr-overlay" style="display: none;">
+    <div class="login-card danger-card">
+      <h1 class="glitch-danger">EXPECTATIVA DE VIDA ZERADA</h1>
+      <p class="subtitle">O seu tempo no território pós-apocalíptico acabou.</p>
+      <button class="btn-oasis" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
     </div>
   </div>
 
@@ -27,14 +36,20 @@
       <div class="stat-badge">SOBREVIVENTE: <span id="display-player-name">---</span></div>
       <div class="stat-badge danger">EXPECTATIVA DE VIDA: <span id="life-span">40 Anos</span></div>
       <div class="stat-badge warning">SUPRIMENTOS: <span id="supplies-val">70%</span></div>
+      <div id="status-safe" class="stat-badge safe" style="display: none;">[ESCONDERIJO SEGURO]</div>
     </header>
 
-    <!-- NOTIFICAÇÃO FLUTUANTE DE ITEM -->
+    <!-- MINIMAPA CONTAINER (CANTO SUPERIOR DIREITO) -->
+    <div class="minimap-wrapper">
+      <canvas id="minimapCanvas" width="140" height="140"></canvas>
+    </div>
+
+    <!-- NOTIFICAÇÃO DE ITEM -->
     <div id="item-popup" class="item-popup" style="display: none;"></div>
 
-    <!-- PROMPT DE INTERAÇÃO -->
+    <!-- PROMPTS DE INTERAÇÃO -->
     <div id="interaction-prompt" class="prompt-box" style="display: none;">
-      Pressiona <span class="key-highlight">[E]</span> ou <span class="key-highlight">[ESPAÇO]</span> para conversar
+      Pressione <span class="key-highlight">[E]</span> ou <span class="key-highlight">[ESPAÇO]</span> para interagir
     </div>
 
     <!-- CAIXA DE DIÁLOGO E DECISÃO -->
@@ -45,7 +60,7 @@
     </div>
   </div>
 
-  <!-- CANVAS EM TELA CHEIA -->
+  <!-- CANVAS PRINCIPAL -->
   <canvas id="gameCanvas"></canvas>
 
   <script src="script.js"></script>
