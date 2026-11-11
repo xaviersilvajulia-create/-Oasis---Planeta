@@ -4,139 +4,118 @@
   padding: 0;
 }
 
-body {
-  background-color: #050406;
-  background-image: 
-    radial-gradient(ellipse at center, rgba(35, 15, 10, 0.8) 0%, rgba(5, 4, 6, 0.95) 100%),
-    linear-gradient(rgba(255, 60, 0, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 60, 0, 0.05) 1px, transparent 1px);
-  background-size: 100% 100%, 30px 30px, 30px 30px;
-  color: #ff5500;
-  font-family: 'Rajdhani', sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  padding: 15px;
-}
-
-.vr-hud {
+html, body {
   width: 100%;
-  max-width: 650px;
-  border: 2px solid #ff5500;
-  box-shadow: 0 0 20px rgba(255, 85, 0, 0.3);
-  background: rgba(15, 10, 8, 0.95);
-  border-radius: 8px;
-  padding: 20px;
+  height: 100%;
+  overflow: hidden;
+  background-color: #050404;
+  font-family: 'Rajdhani', sans-serif;
+  color: #ff5500;
 }
 
-.hud-header {
-  text-align: center;
+/* Canvas ocupa a tela inteira */
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: #110b08;
+}
+
+/* HUD sobreposta */
+#game-ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Permite clicar no canvas através da UI */
+  z-index: 10;
+}
+
+.hud-top {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 15px;
+  background: rgba(10, 5, 4, 0.85);
+  border: 1px solid #ff5500;
+  padding: 10px 20px;
+  border-radius: 6px;
+  box-shadow: 0 0 15px rgba(255, 85, 0, 0.3);
+}
+
+.stat-badge {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.65rem;
+  color: #fff;
+}
+
+.stat-badge.danger { color: #ff0033; }
+.stat-badge.warning { color: #ffcc00; }
+
+/* Prompt de Interação */
+.prompt-box {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #ffcc00;
+  color: #ffcc00;
+  padding: 10px 20px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+.key-highlight { color: #ff0033; }
+
+/* Caixa de Diálogo Centrada */
+.dialog-card {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 550px;
+  background: rgba(15, 5, 5, 0.95);
+  border: 2px solid #ff0033;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 25px rgba(255, 0, 51, 0.5);
+}
+
+.npc-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.85rem;
+  color: #ffcc00;
   margin-bottom: 12px;
 }
 
-h1 {
-  font-family: 'Press Start 2P', cursive;
-  font-size: 1rem;
-  color: #ff0033;
-  text-shadow: 0 0 10px #ff0033;
-  margin-bottom: 6px;
+.npc-message {
+  font-size: 1.1rem;
+  color: #fff;
+  line-height: 1.4;
+  margin-bottom: 18px;
 }
 
-.subtitle {
-  font-size: 0.85rem;
-  letter-spacing: 1px;
-  color: #ffcc00;
-}
-
-.player-highlight {
-  color: #ff5500;
-  font-weight: bold;
-}
-
-/* Status Bars */
-.status-container {
+.options-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.status-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
-.status-label {
-  font-size: 0.75rem;
-  font-family: 'Press Start 2P', cursive;
-  width: 130px;
-  color: #ffcc00;
-}
-
-.bar-outer {
-  flex-grow: 1;
-  height: 14px;
-  background: #111;
-  border: 1px solid #ff5500;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.bar-inner {
-  height: 100%;
-  transition: width 0.3s ease;
-}
-
-.bar-inner.health {
-  background: linear-gradient(90deg, #ff0033, #ff5500);
-}
-
-.bar-inner.supplies {
-  background: linear-gradient(90deg, #ffcc00, #00ff88);
-}
-
-.status-val {
-  width: 45px;
-  text-align: right;
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
-/* Login */
-.login-box {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 15px;
-}
-
-.login-label {
-  font-family: 'Press Start 2P', cursive;
-  font-size: 0.7rem;
-  color: #ffcc00;
-}
-
-#player-name-input {
-  background: rgba(0, 0, 0, 0.7);
-  border: 2px solid #ff5500;
-  color: #fff;
-  padding: 10px;
-  font-family: 'Rajdhani', sans-serif;
-  font-size: 1.1rem;
-  outline: none;
-  border-radius: 4px;
-}
-
 .btn-oasis {
-  background: rgba(255, 85, 0, 0.15);
+  background: rgba(255, 85, 0, 0.2);
   border: 1px solid #ff5500;
   color: #fff;
-  padding: 10px;
+  padding: 12px;
   font-family: 'Rajdhani', sans-serif;
   font-weight: bold;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -148,74 +127,38 @@ h1 {
   box-shadow: 0 0 10px #ff5500;
 }
 
-/* Canvas */
-.canvas-container {
-  position: relative;
+/* Tela de Login */
+.vr-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 4, 4, 0.95);
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 12px;
+  z-index: 20;
 }
 
-canvas {
-  background: #1a120c;
+.login-card {
   border: 2px solid #ff5500;
-  border-radius: 4px;
-  width: 100%;
-  max-width: 600px;
-  height: auto;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+  padding: 30px;
+  border-radius: 8px;
+  text-align: center;
+  background: rgba(20, 10, 8, 0.9);
 }
 
-.prompt-box {
-  position: absolute;
-  bottom: 15px;
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid #ffcc00;
-  color: #ffcc00;
-  padding: 8px 14px;
-  font-family: 'Press Start 2P', cursive;
-  font-size: 0.65rem;
-  border-radius: 4px;
-}
-
-.key-highlight {
-  color: #ff0033;
-  font-weight: bold;
-}
-
-/* Diálogo */
-.dialog-card {
-  border: 1px solid #ff0033;
-  background: rgba(20, 5, 5, 0.95);
-  padding: 15px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  box-shadow: 0 0 15px rgba(255, 0, 51, 0.3);
-}
-
-.npc-title {
-  font-family: 'Press Start 2P', cursive;
-  font-size: 0.75rem;
-  color: #ffcc00;
-  margin-bottom: 8px;
-}
-
-.npc-message {
-  font-size: 1rem;
-  color: #fff;
-  margin-bottom: 12px;
-  line-height: 1.3;
-}
-
-.options-grid {
+.input-group {
+  margin-top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.control-hint {
+#player-name-input {
+  background: #000;
+  border: 1px solid #ff5500;
+  color: #fff;
+  padding: 10px;
+  font-size: 1.1rem;
   text-align: center;
-  font-size: 0.8rem;
-  color: #888;
 }
