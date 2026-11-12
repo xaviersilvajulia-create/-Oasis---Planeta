@@ -3,6 +3,10 @@ let playerName = "Sobrevivente";
 let lifeYears = 35;
 let hunger = 100;
 let thirst = 100;
+let stamina = 100;
+let flaresCount = 2;
+let flashlightOn = true;
+
 let activeNPC = null;
 let activeItem = null;
 let activeShip = null;
@@ -11,52 +15,88 @@ let animFrame = 0;
 let agingTimer = 0;
 let hungerThirstTimer = 0;
 let flashDamage = 0;
+let screenShake = 0;
 let isGameOver = false;
 let isVictory = false;
 let isLaunching = false;
 let playerBoardedShip = false;
 let shipLiftOffset = 0;
 let liftParticles = [];
+let acidProjectiles = [];
+let acidPuddles = [];
+let activeFlares = [];
+let footprints = [];
+let ashParticles = [];
 
 // ==========================================
-// SISTEMA DE ÁUDIO E EFEITOS SONOROS (WEB AUDIO API)
+// CONTROLE DA CENA DE INTRODUÇÃO (10 SEGUNDOS)
+// ==========================================
+let inIntro = false;
+let introTimer = 0;
+const INTRO_DURATION = 600; // 10 segundos a 60 FPS
+let introShipAltitude = 360;
+
+// ==========================================
+// SISTEMA DE ÁUDIO E TRILHA DE TENSÃO (WEB AUDIO API)
 // ==========================================
 let audioCtx = null;
 let audioEnabled = true;
+let masterGain = null;
 let droneOsc1 = null;
 let droneOsc2 = null;
 let droneGain = null;
 let engineOsc = null;
 let engineGain = null;
+let tensionMusicTimer = 0;
+let tensionNoteIndex = 0;
 let heartbeatTimer = 0;
 let stepSoundTimer = 0;
 let isBeingChased = false;
 
+const TENSION_NOTES = [110.00, 116.54, 130.81, 116.54, 103.83, 110.00, 82.41, 98.00];
+
+function garantirAudioAtivo() {
+  if (!audioCtx) {
+    iniciarAudio();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
 function iniciarAudio() {
-  if (audioCtx) return;
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
+
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AudioContext();
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = audioEnabled ? 0.85 : 0;
+  masterGain.connect(audioCtx.destination);
 
   droneOsc1 = audioCtx.createOscillator();
   droneOsc2 = audioCtx.createOscillator();
   droneGain = audioCtx.createGain();
 
   droneOsc1.type = 'sawtooth';
-  droneOsc1.frequency.value = 52;
+  droneOsc1.frequency.value = 110;
 
-  droneOsc2.type = 'sine';
-  droneOsc2.frequency.value = 55.5;
+  droneOsc2.type = 'triangle';
+  droneOsc2.frequency.value = 111.8;
 
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.value = 135;
+  filter.frequency.value = 320;
 
-  droneGain.gain.value = audioEnabled ? 0.07 : 0;
+  droneGain.gain.value = 0.14;
 
   droneOsc1.connect(filter);
   droneOsc2.connect(filter);
   filter.connect(droneGain);
-  droneGain.connect(audioCtx.destination);
+  droneGain.connect(masterGain);
 
   droneOsc1.start();
   droneOsc2.start();
@@ -66,26 +106,69 @@ function iniciarAudio() {
   const engineFilter = audioCtx.createBiquadFilter();
 
   engineOsc.type = 'sawtooth';
-  engineOsc.frequency.value = 45;
+  engineOsc.frequency.value = 90;
   engineFilter.type = 'lowpass';
-  engineFilter.frequency.value = 260;
+  engineFilter.frequency.value = 450;
   engineGain.gain.value = 0;
 
   engineOsc.connect(engineFilter);
   engineFilter.connect(engineGain);
-  engineGain.connect(audioCtx.destination);
+  engineGain.connect(masterGain);
   engineOsc.start();
 }
 
 function alternarAudio() {
+  garantirAudioAtivo();
   audioEnabled = !audioEnabled;
   const btn = document.getElementById('audio-toggle');
   if (btn) btn.innerText = audioEnabled ? 'SOM: ON' : 'SOM: OFF';
-  if (droneGain && audioCtx) {
-    droneGain.gain.setTargetAtTime(audioEnabled ? 0.07 : 0, audioCtx.currentTime, 0.1);
+
+  if (masterGain && audioCtx) {
+    masterGain.gain.setTargetAtTime(audioEnabled ? 0.85 : 0, audioCtx.currentTime, 0.05);
   }
-  if (!audioEnabled && engineGain && audioCtx) {
-    engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+}
+
+function atualizarMusicaDeTensao() {
+  if (!audioEnabled || !audioCtx || !masterGain) return;
+  if (audioCtx.state === 'suspended') return;
+
+  const ritmo = (isBeingChased || isLaunching) ? 24 : (lifeYears <= 12 ? 32 : 48);
+  tensionMusicTimer++;
+
+  if (tensionMusicTimer >= ritmo) {
+    tensionMusicTimer = 0;
+    const freq = TENSION_NOTES[tensionNoteIndex % TENSION_NOTES.length];
+    tensionNoteIndex++;
+
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const subOsc = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const noteGain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(freq * 2, now);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(isBeingChased ? 750 : 420, now);
+
+    const vol = isBeingChased ? 0.16 : 0.10;
+    noteGain.gain.setValueAtTime(0.001, now);
+    noteGain.gain.linearRampToValueAtTime(vol, now + 0.04);
+    noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+    osc.connect(filter);
+    subOsc.connect(filter);
+    filter.connect(noteGain);
+    noteGain.connect(masterGain);
+
+    osc.start(now);
+    subOsc.start(now);
+    osc.stop(now + 0.58);
+    subOsc.stop(now + 0.58);
   }
 }
 
@@ -95,96 +178,164 @@ function atualizarSomMotorNave(ativo, progresso) {
 
   const now = audioCtx.currentTime;
   if (ativo && audioEnabled) {
-    const freq = 45 + (progresso * 1.1);
-    const vol = Math.min(0.24, 0.08 + (progresso / 100) * 0.16);
+    const freq = 95 + (progresso * 2.2);
+    const vol = Math.min(0.32, 0.14 + (progresso / 100) * 0.18);
     engineOsc.frequency.setTargetAtTime(freq, now, 0.08);
     engineGain.gain.setTargetAtTime(vol, now, 0.08);
   } else {
-    engineGain.gain.setTargetAtTime(0, now, 0.12);
+    engineGain.gain.setTargetAtTime(0, now, 0.1);
   }
 }
 
 function tocarEfeitoSonoro(tipo) {
-  if (!audioEnabled || !audioCtx) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioEnabled) return;
+  garantirAudioAtivo();
+  if (!audioCtx || !masterGain) return;
 
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(masterGain);
 
   const now = audioCtx.currentTime;
 
   if (tipo === 'step') {
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(140 + Math.random() * 25, now);
-    osc.frequency.exponentialRampToValueAtTime(60, now + 0.04);
-    gain.gain.setValueAtTime(0.03, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    osc.frequency.setValueAtTime(220 + Math.random() * 40, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.055);
+    gain.gain.setValueAtTime(0.11, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     osc.start(now);
-    osc.stop(now + 0.045);
+    osc.stop(now + 0.06);
   } else if (tipo === 'heartbeat') {
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(75, now);
-    osc.frequency.exponentialRampToValueAtTime(35, now + 0.18);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc.frequency.setValueAtTime(135, now);
+    osc.frequency.exponentialRampToValueAtTime(65, now + 0.2);
+    gain.gain.setValueAtTime(0.34, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.start(now);
-    osc.stop(now + 0.2);
+    osc.stop(now + 0.22);
+  } else if (tipo === 'brute_roar') {
+    // Rugido grave e pesado do Brutamonte
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(115, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.55);
+    gain.gain.setValueAtTime(0.32, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+    osc.start(now);
+    osc.stop(now + 0.58);
+  } else if (tipo === 'brute_step') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(85, now);
+    osc.frequency.exponentialRampToValueAtTime(36, now + 0.15);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.start(now);
+    osc.stop(now + 0.16);
+  } else if (tipo === 'stalker_screech') {
+    // Guincho agudo do Perseguidor
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(920, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(310, now + 0.34);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    osc.start(now);
+    osc.stop(now + 0.36);
+  } else if (tipo === 'acid_spit') {
+    // Chiado borbulhante do Cuspidor Ácido
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(640, now);
+    osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  } else if (tipo === 'flare') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.linearRampToValueAtTime(780, now + 0.25);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc.start(now);
+    osc.stop(now + 0.28);
+  } else if (tipo === 'flashlight') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(700, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } else if (tipo === 'radio_beep') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(960, now);
+    osc.frequency.setValueAtTime(1240, now + 0.06);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  } else if (tipo === 'crash_land') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.7);
+    gain.gain.setValueAtTime(0.38, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    osc.start(now);
+    osc.stop(now + 0.75);
   } else if (tipo === 'item') {
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(440, now);
-    osc.frequency.setValueAtTime(660, now + 0.08);
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.frequency.setValueAtTime(523.25, now);
+    osc.frequency.setValueAtTime(783.99, now + 0.09);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
     osc.start(now);
-    osc.stop(now + 0.25);
+    osc.stop(now + 0.28);
   } else if (tipo === 'ship_part') {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(440, now);
     osc.frequency.setValueAtTime(554.37, now + 0.09);
     osc.frequency.setValueAtTime(659.25, now + 0.18);
     osc.frequency.setValueAtTime(880, now + 0.27);
-    gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     osc.start(now);
-    osc.stop(now + 0.42);
+    osc.stop(now + 0.45);
   } else if (tipo === 'launch_alarm') {
     osc.type = 'square';
     osc.frequency.setValueAtTime(880, now);
-    osc.frequency.setValueAtTime(660, now + 0.06);
-    gain.gain.setValueAtTime(0.07, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.frequency.setValueAtTime(660, now + 0.07);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
     osc.start(now);
-    osc.stop(now + 0.12);
+    osc.stop(now + 0.14);
   } else if (tipo === 'board_hatch') {
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.linearRampToValueAtTime(320, now + 0.22);
-    gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.linearRampToValueAtTime(440, now + 0.25);
+    gain.gain.setValueAtTime(0.26, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
     osc.start(now);
-    osc.stop(now + 0.25);
+    osc.stop(now + 0.28);
   } else if (tipo === 'damage') {
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(110, now);
-    osc.frequency.linearRampToValueAtTime(55, now + 0.25);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.frequency.setValueAtTime(190, now);
+    osc.frequency.linearRampToValueAtTime(85, now + 0.28);
+    gain.gain.setValueAtTime(0.32, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     osc.start(now);
-    osc.stop(now + 0.25);
+    osc.stop(now + 0.3);
   } else if (tipo === 'tick_year') {
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(240, now);
-    gain.gain.setValueAtTime(0.04, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.frequency.setValueAtTime(330, now);
+    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
     osc.start(now);
-    osc.stop(now + 0.08);
+    osc.stop(now + 0.1);
   } else if (tipo === 'liftoff') {
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(85, now);
-    osc.frequency.exponentialRampToValueAtTime(680, now + 2.2);
-    gain.gain.setValueAtTime(0.24, now);
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.exponentialRampToValueAtTime(760, now + 2.2);
+    gain.gain.setValueAtTime(0.35, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
     osc.start(now);
     osc.stop(now + 2.4);
@@ -201,20 +352,21 @@ const player = {
   y: 900,
   width: 26,
   height: 40,
-  baseSpeed: 3.5,
-  speed: 3.5,
+  baseSpeed: 3.4,
+  speed: 3.4,
   skinColor: '#ffdbac',
   shirtColor: '#2563eb',
   pantsColor: '#28362b',
   hairColor: '#1f1610',
   hasBackpack: true,
   facing: 1,
-  isMoving: false
+  aimAngle: 0,
+  isMoving: false,
+  isSprinting: false
 };
 
 const keys = {};
 
-// PLATAFORMA DE LANÇAMENTO E CÁPSULA ESPACIAL
 const escapeShip = {
   x: 1165,
   y: 720,
@@ -225,7 +377,6 @@ const escapeShip = {
   name: "Cápsula Orbital Aurora"
 };
 
-// AS 3 CONSTRUÇÕES DAS PEÇAS DA NAVE (BEM DISTANTES E ESCONDIDAS)
 const buildings = [
   {
     x: 240, y: 1460, w: 185, h: 160,
@@ -244,32 +395,30 @@ const buildings = [
   }
 ];
 
-// POUCOS CARROS PELO CAMINHO
 const wreckedCars = [
   { x: 1330, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
   { x: 760, y: 1120, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
   { x: 1780, y: 860, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// ITENS NO CHÃO: 3 PEÇAS DA NAVE (COM FORMATOS PRÓPRIOS E MAIS DIFÍCEIS DE ACHAR) + COMIDAS E ÁGUAS
 const itemsOnGround = [
-  // 3 PEÇAS DA NAVE (revealedOnRadar começa false; os NPCs revelam no radar quando você pede ajuda!)
   { id: 101, x: 268, y: 1495, type: 'ship_part', partShape: 'suit', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
   { id: 102, x: 2535, y: 805, type: 'ship_part', partShape: 'chip', label: 'Chip de Navegação', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
   { id: 103, x: 1800, y: 2090, type: 'ship_part', partShape: 'fuel', label: 'Núcleo de Combustível', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
 
-  // ÁGUAS (MATAM A SEDE)
   { id: 1, x: 1120, y: 950, type: 'water', label: 'Garrafa de Água', years: 2, hunger: 0, thirst: 45, collected: false },
   { id: 2, x: 1860, y: 810, type: 'water', label: 'Cantil de Água Pura', years: 2, hunger: 0, thirst: 50, collected: false },
   { id: 3, x: 1420, y: 1620, type: 'water', label: 'Galão de Água', years: 2, hunger: 0, thirst: 50, collected: false },
 
-  // COMIDAS (MATAM A FOME)
   { id: 4, x: 640, y: 1220, type: 'food', label: 'Ração Enlatada', years: 2, hunger: 45, thirst: 0, collected: false },
   { id: 5, x: 1660, y: 1420, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
-  { id: 6, x: 2020, y: 980, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false }
+  { id: 6, x: 2020, y: 980, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false },
+
+  // Sinalizadores extras pelo mapa
+  { id: 7, x: 1020, y: 1260, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, hunger: 0, thirst: 0, collected: false },
+  { id: 8, x: 1750, y: 1180, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, hunger: 0, thirst: 0, collected: false }
 ];
 
-// PERSONAGENS QUE AJUDAM A ACHAR O COMBUSTÍVEL, O TRAJE E O CHIP
 const npcs = [
   {
     id: 1,
@@ -288,19 +437,19 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Ei, sobrevivente! Eu sei onde esconderam o Combustível e o Chip da nave Aurora. Qual pista você precisa agora?",
+    dialog: "Use [Q] para jogar sinalizadores e distrair os monstros! Eu sei onde esconderam o Combustível e o Chip da nave Aurora. Qual pista você precisa?",
     options: [
       {
         text: "Onde posso achar o Galão de Combustível?",
         years: 2, hunger: 0, thirst: 0,
         revealPartId: 103,
-        resp: "DICA DO MARCUS: Siga bem para o SUL até o DEPÓSITO SUL (em chamas). O galão vermelho de combustível está escondido no canto interno direito! Marquei o sinal no seu radar."
+        resp: "DICA DO MARCUS: Siga bem para o SUL até o DEPÓSITO SUL (cuidado com o Brutamonte!). O galão vermelho de combustível está no canto interno direito. Marquei no radar!"
       },
       {
         text: "Onde está o Chip de Navegação?",
         years: 2, hunger: 0, thirst: 0,
         revealPartId: 102,
-        resp: "DICA DO MARCUS: Vá direto para o LESTE até o LABORATÓRIO LESTE. Entre pela porta esquerda e procure no fundo da sala! Marquei o sinal no seu radar."
+        resp: "DICA DO MARCUS: Vá direto para o LESTE até o LABORATÓRIO LESTE. Entre pela porta esquerda e procure no fundo da sala! Marquei no radar."
       },
       {
         text: "Preciso de água e comida para a busca.",
@@ -328,13 +477,13 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Você parece estar procurando as peças da nave! Eu vi onde guardaram o Traje Criogênico e também sei onde está o Combustível.",
+    dialog: "Os monstros estão rondando as ruínas! Eu vi onde guardaram o Traje Criogênico e também sei onde está o Combustível.",
     options: [
       {
         text: "Onde posso encontrar o Traje Criogênico?",
         years: 3, hunger: 0, thirst: 0,
         revealPartId: 101,
-        resp: "DICA DA ELENA: Siga mais para SUDOESTE até o POSTO MÉDICO. Entre pela porta de baixo e olhe no canto superior esquerdo! Marquei o sinal no seu radar."
+        resp: "DICA DA ELENA: Siga mais para SUDOESTE até o POSTO MÉDICO. Entre pela porta de baixo e olhe no canto superior esquerdo! Marquei no radar."
       },
       {
         text: "Você sabe onde fica o Combustível?",
@@ -358,13 +507,187 @@ const zombies = [
   { x: 820, y: 1120, width: 26, height: 40, speed: 0.98, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
   { x: 1450, y: 1660, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
   { x: 480, y: 1180, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 2060, y: 840, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 1580, y: 1380, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+  { x: 2060, y: 840, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+];
+
+const monsters = [
+  {
+    name: 'Brutamonte',
+    kind: 'brute',
+    x: 1580, y: 1850,
+    width: 38, height: 52,
+    speed: 0.85,
+    damage: 4,
+    detectRadius: 430,
+    vx: 0, vy: 0, facing: -1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
+  },
+  {
+    name: 'Brutamonte',
+    kind: 'brute',
+    x: 340, y: 1650,
+    width: 38, height: 52,
+    speed: 0.85,
+    damage: 4,
+    detectRadius: 430,
+    vx: 0, vy: 0, facing: 1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
+  },
+  {
+    name: 'Perseguidor',
+    kind: 'stalker',
+    x: 2180, y: 760,
+    width: 30, height: 44,
+    speed: 1.88,
+    damage: 3,
+    detectRadius: 540,
+    vx: 0, vy: 0, facing: -1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
+  },
+  {
+    name: 'Perseguidor',
+    kind: 'stalker',
+    x: 960, y: 1380,
+    width: 30, height: 44,
+    speed: 1.85,
+    damage: 3,
+    detectRadius: 520,
+    vx: 0, vy: 0, facing: 1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
+  },
+  {
+    name: 'Cuspidor Ácido',
+    kind: 'spitter',
+    x: 1480, y: 1120,
+    width: 30, height: 44,
+    speed: 0.95,
+    damage: 2,
+    detectRadius: 490,
+    vx: 0, vy: 0, facing: -1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 90
+  },
+  {
+    name: 'Cuspidor Ácido',
+    kind: 'spitter',
+    x: 1920, y: 1480,
+    width: 30, height: 44,
+    speed: 0.95,
+    damage: 2,
+    detectRadius: 490,
+    vx: 0, vy: 0, facing: 1,
+    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 90
+  }
 ];
 
 function redimensionarCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+}
+
+function inicializarParticulasCinzas() {
+  ashParticles = [];
+  for (let i = 0; i < 65; i++) {
+    ashParticles.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 1400,
+      vx: -0.4 - Math.random() * 0.7,
+      vy: 0.3 + Math.random() * 0.6,
+      size: 1.5 + Math.random() * 2.5,
+      isEmber: Math.random() > 0.75
+    });
+  }
+}
+
+function iniciarCenaIntroducao() {
+  inIntro = true;
+  introTimer = 0;
+  introShipAltitude = 360;
+  document.getElementById('intro-overlay').style.display = 'flex';
+  tocarEfeitoSonoro('radio_beep');
+}
+
+function pularIntroducao() {
+  if (!inIntro) return;
+  inIntro = false;
+  introShipAltitude = 0;
+  document.getElementById('intro-overlay').style.display = 'none';
+}
+
+function atualizarCenaIntroducao() {
+  introTimer++;
+  const remaining = Math.max(0, Math.ceil((INTRO_DURATION - introTimer) / 60));
+  document.getElementById('intro-timer').innerText = remaining + 's';
+
+  const sub = document.getElementById('intro-subtitle');
+
+  if (introTimer === 1) {
+    sub.innerText = "ALERTA CRÍTICO: Órbita terrestre em colapso. Cápsula Aurora sofrendo falha nos propulsores!";
+  } else if (introTimer === 180) {
+    tocarEfeitoSonoro('radio_beep');
+    sub.innerText = "IMPACTO DETECTADO! As 3 peças essenciais da nave se soltaram e caíram nas construções próximas.";
+  } else if (introTimer === 360) {
+    tocarEfeitoSonoro('radio_beep');
+    sub.innerText = "ATENÇÃO: A radiação temporal está consumindo seus anos de vida e mutantes cercam a região.";
+  } else if (introTimer === 480) {
+    tocarEfeitoSonoro('radio_beep');
+    sub.innerText = "Fale com os sobreviventes para localizar as peças, use [F] para a lanterna e [Q] para sinalizadores!";
+  }
+
+  // Descida da nave nos primeiros 3.5 segundos
+  if (introShipAltitude > 0) {
+    introShipAltitude = Math.max(0, introShipAltitude - 1.8);
+    liftParticles.push({
+      x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 40,
+      y: escapeShip.y + escapeShip.height - introShipAltitude + 6,
+      vx: (Math.random() - 0.5) * 3,
+      vy: 1.2 + Math.random() * 2,
+      life: 30,
+      size: 9 + Math.random() * 12
+    });
+    if (introShipAltitude === 0) {
+      screenShake = 18;
+      tocarEfeitoSonoro('crash_land');
+    }
+  }
+
+  for (let p of liftParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+  }
+  liftParticles = liftParticles.filter(p => p.life > 0);
+
+  // Câmera focada na nave durante a introdução
+  camera.x = (escapeShip.x + escapeShip.width / 2) - canvas.width / 2;
+  camera.y = (escapeShip.y + escapeShip.height / 2 + 40) - canvas.height / 2;
+
+  if (introTimer >= INTRO_DURATION) {
+    pularIntroducao();
+  }
+}
+
+function lancarSinalizador() {
+  if (flaresCount <= 0 || inIntro || inDialog || isGameOver || isVictory || playerBoardedShip) return;
+  flaresCount--;
+  document.getElementById('flares-val').innerText = flaresCount;
+
+  activeFlares.push({
+    x: player.x + player.width / 2 + player.facing * 18,
+    y: player.y + player.height - 6,
+    life: 420 // 7 segundos atraindo monstros e zumbis
+  });
+
+  tocarEfeitoSonoro('flare');
+  mostrarPopupItem('SINALIZADOR LANÇADO! Monstros atraídos pela luz.');
+}
+
+function alternarLanterna() {
+  if (inIntro || inDialog || isGameOver || isVictory) return;
+  flashlightOn = !flashlightOn;
+  const el = document.getElementById('flashlight-val');
+  el.innerText = flashlightOn ? 'LIGADA' : 'DESLIGADA';
+  el.style.color = flashlightOn ? '#38bdf8' : '#94a3b8';
+  tocarEfeitoSonoro('flashlight');
 }
 
 function iniciarJogo() {
@@ -380,15 +703,30 @@ function iniciarJogo() {
 
   miniCanvas = document.getElementById('minimapCanvas');
   miniCtx = miniCanvas.getContext('2d');
-  
+
   redimensionarCanvas();
   window.addEventListener('resize', redimensionarCanvas);
 
   iniciarAudio();
+  inicializarParticulasCinzas();
+  iniciarCenaIntroducao();
+
+  window.addEventListener('pointerdown', garantirAudioAtivo);
 
   window.addEventListener('keydown', e => {
+    garantirAudioAtivo();
     const k = e.key.toLowerCase();
     keys[k] = true;
+
+    if (k === 'enter' && inIntro) {
+      pularIntroducao();
+      return;
+    }
+
+    if (inIntro) return;
+
+    if (k === 'f') alternarLanterna();
+    if (k === 'q') lancarSinalizador();
 
     if (['e', ' '].includes(k) && !inDialog && !isGameOver && !isVictory && !playerBoardedShip) {
       if (activeNPC) abrirDialogo(activeNPC);
@@ -402,9 +740,13 @@ function iniciarJogo() {
 }
 
 function reiniciarJogo() {
+  garantirAudioAtivo();
   lifeYears = 35;
   hunger = 100;
   thirst = 100;
+  stamina = 100;
+  flaresCount = 2;
+  flashlightOn = true;
   player.x = 1200;
   player.y = 900;
   player.speed = player.baseSpeed;
@@ -416,12 +758,19 @@ function reiniciarJogo() {
   playerBoardedShip = false;
   shipLiftOffset = 0;
   liftParticles = [];
+  acidProjectiles = [];
+  acidPuddles = [];
+  activeFlares = [];
+  footprints = [];
   escapeShip.launched = false;
   escapeShip.progress = 0;
 
   atualizarSomMotorNave(false, 0);
   atualizarHUDStatus();
   document.getElementById('parts-val').innerText = '0/3';
+  document.getElementById('flares-val').innerText = flaresCount;
+  document.getElementById('flashlight-val').innerText = 'LIGADA';
+  document.getElementById('flashlight-val').style.color = '#38bdf8';
   document.getElementById('game-over-screen').style.display = 'none';
   document.getElementById('victory-screen').style.display = 'none';
 
@@ -431,6 +780,7 @@ function reiniciarJogo() {
   });
   npcs.forEach(n => n.solved = false);
 
+  iniciarCenaIntroducao();
   requestAnimationFrame(gameLoop);
 }
 
@@ -441,6 +791,7 @@ function atualizarHUDStatus() {
 
   const hVal = Math.round(hunger);
   const tVal = Math.round(thirst);
+  const sVal = Math.round(stamina);
 
   document.getElementById('hunger-text').innerText = hVal + '%';
   document.getElementById('hunger-bar').style.width = hVal + '%';
@@ -450,16 +801,21 @@ function atualizarHUDStatus() {
   document.getElementById('thirst-bar').style.width = tVal + '%';
   document.getElementById('thirst-bar').style.background = tVal <= 30 ? '#ff3333' : '#00ccff';
 
+  document.getElementById('stamina-text').innerText = sVal + '%';
+  document.getElementById('stamina-bar').style.width = sVal + '%';
+  document.getElementById('stamina-bar').style.background = sVal <= 25 ? '#ef4444' : '#22c55e';
+
   let speedFactor = 1.0;
   if (hunger <= 0 || thirst <= 0) {
-    speedFactor = 0.52;
+    speedFactor = 0.55;
   } else if (hunger <= 30 && thirst <= 30) {
-    speedFactor = 0.65;
+    speedFactor = 0.70;
   } else if (hunger <= 30 || thirst <= 30) {
-    speedFactor = 0.78;
+    speedFactor = 0.82;
   }
 
-  player.speed = player.baseSpeed * speedFactor;
+  const sprintMultiplier = player.isSprinting ? 1.55 : 1.0;
+  player.speed = player.baseSpeed * speedFactor * sprintMultiplier;
 
   const slowBadge = document.getElementById('status-slow');
   if (slowBadge) {
@@ -471,6 +827,16 @@ function gameLoop() {
   if (isGameOver || isVictory) return;
 
   animFrame++;
+  atualizarParticulasAmbiente();
+
+  if (inIntro) {
+    atualizarCenaIntroducao();
+    atualizarMusicaDeTensao();
+    desenhar();
+    desenharMinimapa();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
 
   if (playerBoardedShip) {
     atualizarAnimacaoDecolagem();
@@ -487,15 +853,19 @@ function gameLoop() {
     atualizarJogador();
     atualizarFomeSedeETempo();
     atualizarNPCs();
+    atualizarSinalizadores();
     atualizarZumbis();
+    atualizarMonstros();
+    atualizarProjeteisAcido();
     verificarInteracoes();
     atualizarDecolagemNave();
-    verificarAtaqueZumbi();
+    verificarAtaqueInimigos();
     verificarMorte();
   } else {
     atualizarSomMotorNave(false, 0);
   }
 
+  atualizarMusicaDeTensao();
   atualizarSomTensao();
   atualizarCamera();
   desenhar();
@@ -504,6 +874,29 @@ function gameLoop() {
   if (!isGameOver && !isVictory) {
     requestAnimationFrame(gameLoop);
   }
+}
+
+function atualizarParticulasAmbiente() {
+  for (let p of ashParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = canvas.width;
+    if (p.y > canvas.height) {
+      p.y = 0;
+      p.x = Math.random() * canvas.width;
+    }
+  }
+
+  for (let fp of footprints) fp.life--;
+  footprints = footprints.filter(fp => fp.life > 0);
+
+  for (let ap of acidPuddles) ap.life--;
+  acidPuddles = acidPuddles.filter(ap => ap.life > 0);
+}
+
+function atualizarSinalizadores() {
+  for (let f of activeFlares) f.life--;
+  activeFlares = activeFlares.filter(f => f.life > 0);
 }
 
 function atualizarAnimacaoDecolagem() {
@@ -537,7 +930,7 @@ function atualizarAnimacaoDecolagem() {
 
 function atualizarFomeSedeETempo() {
   hungerThirstTimer++;
-  const interval = player.isMoving ? 42 : 65;
+  const interval = player.isSprinting ? 28 : (player.isMoving ? 44 : 65);
   if (hungerThirstTimer >= interval) {
     hungerThirstTimer = 0;
     hunger = Math.max(0, hunger - 1);
@@ -644,13 +1037,13 @@ function checarColisaoObstaculos(nextX, nextY) {
   return false;
 }
 
-function checarColisaoZumbi(nextX, nextY, z) {
+function checarColisaoCriatura(nextX, nextY, ent) {
   for (let b of buildings) {
     if (
       nextX < b.x + b.w + 4 &&
-      nextX + z.width > b.x - 4 &&
+      nextX + ent.width > b.x - 4 &&
       nextY < b.y + b.h + 4 &&
-      nextY + z.height > b.y - 4
+      nextY + ent.height > b.y - 4
     ) {
       return true;
     }
@@ -659,9 +1052,9 @@ function checarColisaoZumbi(nextX, nextY, z) {
   for (let c of wreckedCars) {
     if (
       nextX < c.x + c.w &&
-      nextX + z.width > c.x &&
+      nextX + ent.width > c.x &&
       nextY < c.y + c.h &&
-      nextY + z.height > c.y
+      nextY + ent.height > c.y
     ) {
       return true;
     }
@@ -672,23 +1065,50 @@ function checarColisaoZumbi(nextX, nextY, z) {
 
 function atualizarJogador() {
   player.isMoving = false;
-  let nextX = player.x;
-  let nextY = player.y;
+  let dx = 0;
+  let dy = 0;
 
-  if (keys['w'] || keys['arrowup']) { nextY -= player.speed; player.isMoving = true; }
-  if (keys['s'] || keys['arrowdown']) { nextY += player.speed; player.isMoving = true; }
-  if (keys['a'] || keys['arrowleft']) { nextX -= player.speed; player.isMoving = true; player.facing = -1; }
-  if (keys['d'] || keys['arrowright']) { nextX += player.speed; player.isMoving = true; player.facing = 1; }
+  if (keys['w'] || keys['arrowup']) { dy -= 1; player.isMoving = true; }
+  if (keys['s'] || keys['arrowdown']) { dy += 1; player.isMoving = true; }
+  if (keys['a'] || keys['arrowleft']) { dx -= 1; player.isMoving = true; player.facing = -1; }
+  if (keys['d'] || keys['arrowright']) { dx += 1; player.isMoving = true; player.facing = 1; }
+
+  // Corrida (Sprint) com Shift
+  if (keys['shift'] && player.isMoving && stamina > 2) {
+    player.isSprinting = true;
+    stamina = Math.max(0, stamina - 0.65);
+  } else {
+    player.isSprinting = false;
+    stamina = Math.min(100, stamina + (player.isMoving ? 0.25 : 0.55));
+  }
+  atualizarHUDStatus();
+
+  if (dx !== 0 || dy !== 0) {
+    const len = Math.hypot(dx, dy);
+    dx /= len;
+    dy /= len;
+    player.aimAngle = Math.atan2(dy, dx);
+  } else {
+    player.aimAngle = player.facing === 1 ? 0 : Math.PI;
+  }
+
+  const nextX = player.x + dx * player.speed;
+  const nextY = player.y + dy * player.speed;
 
   if (!checarColisaoObstaculos(nextX, player.y)) player.x = nextX;
   if (!checarColisaoObstaculos(player.x, nextY)) player.y = nextY;
 
   if (player.isMoving) {
     stepSoundTimer++;
-    const stepInterval = player.speed < player.baseSpeed ? 22 : 16;
+    const stepInterval = player.isSprinting ? 11 : (player.speed < player.baseSpeed ? 22 : 16);
     if (stepSoundTimer >= stepInterval) {
       stepSoundTimer = 0;
       tocarEfeitoSonoro('step');
+      footprints.push({
+        x: player.x + player.width / 2,
+        y: player.y + player.height - 2,
+        life: 90
+      });
     }
   } else {
     stepSoundTimer = 12;
@@ -696,8 +1116,15 @@ function atualizarJogador() {
 }
 
 function atualizarCamera() {
-  camera.x = player.x + player.width / 2 - canvas.width / 2;
-  camera.y = player.y + player.height / 2 - canvas.height / 2;
+  let shakeX = 0;
+  let shakeY = 0;
+  if (screenShake > 0) {
+    shakeX = (Math.random() - 0.5) * screenShake;
+    shakeY = (Math.random() - 0.5) * screenShake;
+    screenShake = Math.max(0, screenShake - 0.8);
+  }
+  camera.x = player.x + player.width / 2 - canvas.width / 2 + shakeX;
+  camera.y = player.y + player.height / 2 - canvas.height / 2 + shakeY;
 }
 
 function atualizarNPCs() {
@@ -718,6 +1145,21 @@ function atualizarNPCs() {
   }
 }
 
+function obterAlvoMaisProximo(ex, ey, defaultTargetX, defaultTargetY, detectRadius) {
+  // Sinalizadores têm prioridade máxima para distrair monstros e zumbis!
+  for (let f of activeFlares) {
+    const dFlare = Math.hypot(f.x - ex, f.y - ey);
+    if (dFlare < 520) {
+      return { x: f.x, y: f.y, isFlare: true };
+    }
+  }
+  const dPlayer = Math.hypot(defaultTargetX - ex, defaultTargetY - ey);
+  if (dPlayer < detectRadius) {
+    return { x: defaultTargetX, y: defaultTargetY, isFlare: false };
+  }
+  return null;
+}
+
 function atualizarZumbis() {
   isBeingChased = false;
 
@@ -729,20 +1171,32 @@ function atualizarZumbis() {
     }
   }
 
-  const detectionRadius = isLaunching ? 1100 : 420;
+  const detectionRadius = isLaunching ? 1100 : (flashlightOn ? 440 : 310);
 
   for (let z of zombies) {
-    const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
-    const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
-    const dist = Math.hypot(dx, dy);
+    const zx = z.x + z.width / 2;
+    const zy = z.y + z.height / 2;
+    const px = player.x + player.width / 2;
+    const py = player.y + player.height / 2;
 
-    if (!playerInsideBuilding && dist < detectionRadius) {
+    const target = obterAlvoMaisProximo(zx, zy, px, py, playerInsideBuilding ? 0 : detectionRadius);
+
+    if (target) {
+      const dx = target.x - zx;
+      const dy = target.y - zy;
+      const dist = Math.hypot(dx, dy);
       const chaseSpeed = isLaunching ? z.speed * 1.3 : z.speed;
-      z.vx = (dx / dist) * chaseSpeed;
-      z.vy = (dy / dist) * chaseSpeed;
-      z.isMoving = true;
+      if (dist > 14) {
+        z.vx = (dx / dist) * chaseSpeed;
+        z.vy = (dy / dist) * chaseSpeed;
+        z.isMoving = true;
+      } else {
+        z.vx = 0;
+        z.vy = 0;
+        z.isMoving = false;
+      }
       z.facing = dx >= 0 ? 1 : -1;
-      isBeingChased = true;
+      if (!target.isFlare) isBeingChased = true;
     } else {
       z.patrolTimer++;
       if (z.patrolTimer > 110 + Math.random() * 60) {
@@ -761,32 +1215,167 @@ function atualizarZumbis() {
       }
     }
 
-    let blockedX = false;
-    let blockedY = false;
+    moverCriaturaComDesvio(z);
+  }
+}
 
-    if (!checarColisaoZumbi(z.x + z.vx, z.y, z)) {
-      z.x += z.vx;
+function atualizarMonstros() {
+  let playerInsideBuilding = false;
+  for (let b of buildings) {
+    if (jogadorDentroDe(b)) {
+      playerInsideBuilding = true;
+      break;
+    }
+  }
+
+  for (let m of monsters) {
+    const mx = m.x + m.width / 2;
+    const my = m.y + m.height / 2;
+    const px = player.x + player.width / 2;
+    const py = player.y + player.height / 2;
+    const baseRadius = isLaunching ? 1200 : (flashlightOn ? m.detectRadius : m.detectRadius * 0.72);
+
+    if (m.attackCooldown > 0) m.attackCooldown--;
+
+    // Passos pesados do Brutamonte tremem a câmera se estiver perto
+    if (m.kind === 'brute' && m.isMoving && animFrame % 28 === 0) {
+      const distPlayer = Math.hypot(px - mx, py - my);
+      if (distPlayer < 360) {
+        screenShake = Math.max(screenShake, 5);
+        tocarEfeitoSonoro('brute_step');
+      }
+    }
+
+    const target = obterAlvoMaisProximo(mx, my, px, py, playerInsideBuilding ? 0 : baseRadius);
+
+    if (target) {
+      const dx = target.x - mx;
+      const dy = target.y - my;
+      const dist = Math.hypot(dx, dy);
+
+      if (!target.isFlare) {
+        isBeingChased = true;
+        if (!m.wasChasing) {
+          m.wasChasing = true;
+          if (m.kind === 'brute') {
+            tocarEfeitoSonoro('brute_roar');
+            screenShake = Math.max(screenShake, 8);
+          } else if (m.kind === 'stalker') {
+            tocarEfeitoSonoro('stalker_screech');
+          } else {
+            tocarEfeitoSonoro('acid_spit');
+          }
+        }
+      }
+
+      const chaseSpeed = isLaunching ? m.speed * 1.25 : m.speed;
+
+      if (m.kind === 'spitter' && !target.isFlare && dist < 240) {
+        m.vx = 0;
+        m.vy = 0;
+        m.isMoving = false;
+        m.facing = dx >= 0 ? 1 : -1;
+      } else if (dist > 16) {
+        m.vx = (dx / dist) * chaseSpeed;
+        m.vy = (dy / dist) * chaseSpeed;
+        m.isMoving = true;
+        m.facing = dx >= 0 ? 1 : -1;
+      } else {
+        m.vx = 0;
+        m.vy = 0;
+        m.isMoving = false;
+      }
+
+      if (m.kind === 'spitter' && !target.isFlare && m.attackCooldown <= 0 && dist < 390) {
+        m.attackCooldown = 140;
+        const speedProj = 4.2;
+        acidProjectiles.push({
+          x: mx,
+          y: my - 6,
+          vx: (dx / dist) * speedProj,
+          vy: (dy / dist) * speedProj,
+          life: 110
+        });
+        tocarEfeitoSonoro('acid_spit');
+      }
     } else {
-      blockedX = true;
+      m.wasChasing = false;
+      m.patrolTimer++;
+      if (m.patrolTimer > 120 + Math.random() * 60) {
+        m.patrolTimer = 0;
+        const ang = Math.random() * Math.PI * 2;
+        if (Math.random() > 0.35) {
+          m.vx = Math.cos(ang) * (m.speed * 0.5);
+          m.vy = Math.sin(ang) * (m.speed * 0.5);
+          m.isMoving = true;
+          m.facing = m.vx >= 0 ? 1 : -1;
+        } else {
+          m.vx = 0;
+          m.vy = 0;
+          m.isMoving = false;
+        }
+      }
     }
 
-    if (!checarColisaoZumbi(z.x, z.y + z.vy, z)) {
-      z.y += z.vy;
-    } else {
-      blockedY = true;
+    moverCriaturaComDesvio(m);
+  }
+}
+
+function atualizarProjeteisAcido() {
+  for (let p of acidProjectiles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+
+    for (let b of buildings) {
+      if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) {
+        acidPuddles.push({ x: p.x, y: p.y, life: 240 });
+        p.life = 0;
+        break;
+      }
     }
 
-    if (blockedX && blockedY) {
-      z.vx = -z.vx;
-      z.vy = -z.vy;
-      z.facing = z.vx >= 0 ? 1 : -1;
-      z.patrolTimer = 0;
-    } else if (blockedX) {
-      z.vx = -z.vx * 0.5;
-      z.facing = z.vx >= 0 ? 1 : -1;
-    } else if (blockedY) {
-      z.vy = -z.vy * 0.5;
+    const dist = Math.hypot((player.x + player.width / 2) - p.x, (player.y + player.height / 2) - p.y);
+    if (dist < 18 && p.life > 0) {
+      acidPuddles.push({ x: p.x, y: p.y, life: 240 });
+      p.life = 0;
+      lifeYears = Math.max(0, lifeYears - 2);
+      flashDamage = 7;
+      atualizarHUDStatus();
+      tocarEfeitoSonoro('damage');
+    } else if (p.life === 1) {
+      acidPuddles.push({ x: p.x, y: p.y, life: 240 });
     }
+  }
+  acidProjectiles = acidProjectiles.filter(p => p.life > 0);
+}
+
+function moverCriaturaComDesvio(ent) {
+  let blockedX = false;
+  let blockedY = false;
+
+  if (!checarColisaoCriatura(ent.x + ent.vx, ent.y, ent)) {
+    ent.x += ent.vx;
+  } else {
+    blockedX = true;
+  }
+
+  if (!checarColisaoCriatura(ent.x, ent.y + ent.vy, ent)) {
+    ent.y += ent.vy;
+  } else {
+    blockedY = true;
+  }
+
+  if (blockedX && blockedY) {
+    ent.vx = -ent.vx;
+    ent.vy = -ent.vy;
+    ent.facing = ent.vx >= 0 ? 1 : -1;
+    ent.patrolTimer = 0;
+  } else if (blockedX) {
+    ent.vx = -ent.vx * 0.5;
+    ent.facing = ent.vx >= 0 ? 1 : -1;
+  } else if (blockedY) {
+    ent.vy = -ent.vy * 0.5;
   }
 }
 
@@ -818,7 +1407,6 @@ function verificarInteracoes() {
     }
   }
 
-  // NPCs sempre permitem conversar para pedir dicas de onde encontrar os itens
   for (let npc of npcs) {
     const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
     if (dist < 52) {
@@ -896,6 +1484,11 @@ function coletarItem(item) {
     } else {
       mostrarPopupItem(`Peça da Nave (${parts}/3): ${item.label}!`);
     }
+  } else if (item.type === 'flare') {
+    flaresCount++;
+    document.getElementById('flares-val').innerText = flaresCount;
+    tocarEfeitoSonoro('item');
+    mostrarPopupItem(`Pegou ${item.label}!`);
   } else if (item.type === 'water') {
     tocarEfeitoSonoro('item');
     mostrarPopupItem(`Bebeu ${item.label} (+${item.thirst}% Sede)`);
@@ -914,16 +1507,30 @@ function mostrarPopupItem(texto) {
   setTimeout(() => { pop.style.display = 'none'; }, 3000);
 }
 
-function verificarAtaqueZumbi() {
+function verificarAtaqueInimigos() {
   if (playerBoardedShip) return;
 
+  const px = player.x + player.width / 2;
+  const py = player.y + player.height / 2;
+
   for (let z of zombies) {
-    const dist = Math.hypot((player.x + player.width/2) - (z.x + z.width/2), (player.y + player.height/2) - (z.y + z.height/2));
+    const dist = Math.hypot(px - (z.x + z.width / 2), py - (z.y + z.height / 2));
     if (dist < 22) {
       lifeYears = Math.max(0, lifeYears - 2);
       flashDamage = 6;
       atualizarHUDStatus();
       if (animFrame % 15 === 0) tocarEfeitoSonoro('damage');
+    }
+  }
+
+  for (let m of monsters) {
+    const dist = Math.hypot(px - (m.x + m.width / 2), py - (m.y + m.height / 2));
+    const hitRange = m.kind === 'brute' ? 30 : 25;
+    if (dist < hitRange && animFrame % 18 === 0) {
+      lifeYears = Math.max(0, lifeYears - m.damage);
+      flashDamage = 8;
+      atualizarHUDStatus();
+      tocarEfeitoSonoro('damage');
     }
   }
 }
@@ -959,7 +1566,6 @@ function abrirDialogo(npc) {
 }
 
 function responderNPC(npc, opcao) {
-  // Se a opção for um suprimento e o NPC já tiver dado suprimento antes, avisa
   if (opcao.revealPartId === null && npc.solved) {
     document.getElementById('npc-text').innerText = "Já te entreguei todos os meus suprimentos extras, mas ainda posso te dizer onde estão as peças da nave!";
     document.getElementById('dialog-options').innerHTML = `
@@ -973,7 +1579,6 @@ function responderNPC(npc, opcao) {
   hunger = Math.min(100, hunger + (opcao.hunger || 0));
   thirst = Math.min(100, thirst + (opcao.thirst || 0));
 
-  // Revela a localização da peça no radar quando você pede a dica ao personagem!
   if (opcao.revealPartId) {
     const part = itemsOnGround.find(i => i.id === opcao.revealPartId);
     if (part) {
@@ -1197,9 +1802,6 @@ function desenharCarroDestruido(c) {
   }
 }
 
-// ==========================================
-// NAVE ESPACIAL NA PLATAFORMA DE LANÇAMENTO
-// ==========================================
 function desenharNaveEspacial() {
   const sx = escapeShip.x - camera.x;
   const sy = escapeShip.y - camera.y;
@@ -1223,13 +1825,14 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  const shipY = sy - shipLiftOffset;
-  const shakeX = (isLaunching || playerBoardedShip) ? (Math.random() - 0.5) * 4.5 : 0;
+  const verticalOffset = inIntro ? introShipAltitude : shipLiftOffset;
+  const shipY = sy - verticalOffset;
+  const shakeX = (isLaunching || playerBoardedShip || (inIntro && introShipAltitude > 0)) ? (Math.random() - 0.5) * 4.5 : 0;
   const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
   const cx = sx + escapeShip.width / 2 + shakeX;
   const cy = shipY + escapeShip.height / 2 + shakeY;
 
-  if (isLaunching || playerBoardedShip) {
+  if (isLaunching || playerBoardedShip || (inIntro && introShipAltitude > 0)) {
     const scaleFlame = playerBoardedShip ? 1.5 : 1.1;
     desenharFogoAnimado(cx - 18, shipY + escapeShip.height + 6, scaleFlame);
     desenharFogoAnimado(cx + 18, shipY + escapeShip.height + 6, scaleFlame);
@@ -1285,7 +1888,7 @@ function desenharNaveEspacial() {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  if (playerBoardedShip) {
+  if (playerBoardedShip || inIntro) {
     ctx.fillStyle = '#ffdbac';
     ctx.beginPath();
     ctx.arc(cx, cy - 7, 4.5, 0, Math.PI * 2);
@@ -1308,7 +1911,7 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  if (!playerBoardedShip) {
+  if (!playerBoardedShip && !inIntro) {
     ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
     ctx.font = '8px "Press Start 2P"';
     ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
@@ -1324,11 +1927,47 @@ function desenharCenario() {
     desenharCarroDestruido(c);
   }
 
+  // Pegadas na poeira e poças de ácido
+  for (let fp of footprints) {
+    ctx.fillStyle = `rgba(10, 7, 5, ${(fp.life / 90) * 0.45})`;
+    ctx.beginPath();
+    ctx.arc(fp.x - camera.x, fp.y - camera.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let ap of acidPuddles) {
+    ctx.fillStyle = `rgba(132, 204, 22, ${(ap.life / 240) * 0.55})`;
+    ctx.beginPath();
+    ctx.ellipse(ap.x - camera.x, ap.y - camera.y, 12, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   desenharNaveEspacial();
 }
 
+function desenharSinalizadores() {
+  for (let f of activeFlares) {
+    const sx = f.x - camera.x;
+    const sy = f.y - camera.y;
+    const pulse = 28 + Math.sin(animFrame * 0.4) * 8;
+
+    const glow = ctx.createRadialGradient(sx, sy, 2, sx, sy, pulse);
+    glow.addColorStop(0, 'rgba(255, 40, 40, 0.7)');
+    glow.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 // ==========================================
-// ITENS NO CHÃO (COMBUSTÍVEL, TRAJE E CHIP COM FORMATOS PRÓPRIOS)
+// ITENS NO CHÃO (COMBUSTÍVEL, TRAJE, CHIP E SINALIZADOR)
 // ==========================================
 function desenharItemChao(item) {
   if (item.collected) return;
@@ -1345,7 +1984,6 @@ function desenharItemChao(item) {
     ctx.fill();
 
     if (item.partShape === 'fuel') {
-      // FORMATO DE GALÃO DE COMBUSTÍVEL VERMELHO
       ctx.fillStyle = '#dc2626';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.2;
@@ -1354,15 +1992,12 @@ function desenharItemChao(item) {
       ctx.fill();
       ctx.stroke();
 
-      // Alça superior do galão
       ctx.fillStyle = '#991b1b';
       ctx.fillRect(screenX - 4, screenY - 10, 7, 3);
 
-      // Bico/tampa amarela de combustível
       ctx.fillStyle = '#facc15';
       ctx.fillRect(screenX + 3, screenY - 10, 3, 4);
 
-      // Marcação "X" de galão metálico
       ctx.strokeStyle = '#fca5a5';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1373,8 +2008,6 @@ function desenharItemChao(item) {
       ctx.stroke();
 
     } else if (item.partShape === 'suit') {
-      // FORMATO DE TRAJE CRIOGÊNICO / ESPACIAL
-      // Capacete com visor azul
       ctx.fillStyle = '#e2e8f0';
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 1.2;
@@ -1386,19 +2019,16 @@ function desenharItemChao(item) {
       ctx.fillStyle = '#0284c7';
       ctx.fillRect(screenX - 3, screenY - 8, 6, 3);
 
-      // Corpo do traje
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
       ctx.roundRect(screenX - 6, screenY - 2, 12, 9, 2);
       ctx.fill();
       ctx.stroke();
 
-      // Pernas do traje
       ctx.fillRect(screenX - 5, screenY + 7, 4, 5);
       ctx.fillRect(screenX + 1, screenY + 7, 4, 5);
 
     } else if (item.partShape === 'chip') {
-      // FORMATO DE CHIP DE NAVEGAÇÃO (MICROCHIP COM PINOS DOURADOS)
       ctx.fillStyle = '#facc15';
       for (let p = -5; p <= 5; p += 5) {
         ctx.fillRect(screenX - 10, screenY + p - 1, 20, 2);
@@ -1413,11 +2043,20 @@ function desenharItemChao(item) {
       ctx.fill();
       ctx.stroke();
 
-      // Núcleo brilhante do chip
       ctx.fillStyle = '#00e5ff';
       ctx.fillRect(screenX - 3, screenY - 3, 6, 6);
     }
 
+  } else if (item.type === 'flare') {
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(screenX - 2, screenY - 7, 4, 14);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(screenX - 2, screenY - 7, 4, 3);
   } else if (item.type === 'water') {
     ctx.fillStyle = 'rgba(0, 204, 255, 0.35)';
     ctx.beginPath();
@@ -1448,9 +2087,8 @@ function desenharItemChao(item) {
     ctx.stroke();
   }
 
-  // Barrinha com o nome só aparece quando você chega bem perto (< 85px) para manter a busca desafiadora
   const distToPlayer = Math.hypot((player.x + player.width / 2) - item.x, (player.y + player.height / 2) - item.y);
-  if (distToPlayer < 85) {
+  if (distToPlayer < 85 && !inIntro) {
     ctx.font = 'bold 11px Rajdhani, sans-serif';
     const textWidth = ctx.measureText(item.label).width;
     const tagW = textWidth + 16;
@@ -1459,7 +2097,7 @@ function desenharItemChao(item) {
     const tagY = screenY - 32;
 
     let accentColor = '#00e5ff';
-    if (item.partShape === 'fuel') accentColor = '#ef4444';
+    if (item.partShape === 'fuel' || item.type === 'flare') accentColor = '#ef4444';
     else if (item.type === 'water') accentColor = '#00ccff';
     else if (item.type === 'food') accentColor = '#ff9900';
 
@@ -1480,8 +2118,166 @@ function desenharItemChao(item) {
 }
 
 // ==========================================
-// PERSONAGENS: JOGADOR MENINO, NPCs E ZUMBIS
+// DESENHO DOS MONSTROS MUTANTES
 // ==========================================
+function desenharMonstro(m) {
+  const screenX = m.x - camera.x;
+  const screenY = m.y - camera.y;
+
+  if (screenX < -90 || screenX > canvas.width + 90 || screenY < -90 || screenY > canvas.height + 90) return;
+
+  const facing = m.facing || 1;
+  const cycle = animFrame * (m.kind === 'stalker' ? 0.32 : 0.16);
+  const legSwing = m.isMoving ? Math.sin(cycle) * 5 : 0;
+  const bob = m.isMoving ? Math.abs(Math.sin(cycle)) * 2.5 : 0;
+  const cx = screenX + m.width / 2;
+
+  const auraColor = m.kind === 'spitter' ? 'rgba(34, 197, 94, 0.22)' : 'rgba(168, 85, 247, 0.22)';
+  ctx.fillStyle = auraColor;
+  ctx.beginPath();
+  ctx.arc(cx, screenY + m.height / 2, m.width * 0.85, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.beginPath();
+  ctx.ellipse(cx, screenY + m.height - 2, m.width * 0.48, 5.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#09090b';
+  ctx.lineWidth = 1.5;
+
+  if (m.kind === 'brute') {
+    ctx.fillStyle = '#3b0764';
+    ctx.fillRect(cx - 12, screenY + 34 - bob, 9, 14 + legSwing);
+    ctx.strokeRect(cx - 12, screenY + 34 - bob, 9, 14 + legSwing);
+    ctx.fillRect(cx + 3, screenY + 34 - bob, 9, 14 - legSwing);
+    ctx.strokeRect(cx + 3, screenY + 34 - bob, 9, 14 - legSwing);
+
+    ctx.fillStyle = '#581c87';
+    ctx.beginPath();
+    ctx.roundRect(cx - 17, screenY + 12 - bob, 34, 24, 5);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#c084fc';
+    ctx.beginPath();
+    ctx.moveTo(cx - 16, screenY + 14 - bob);
+    ctx.lineTo(cx - 22, screenY + 4 - bob);
+    ctx.lineTo(cx - 10, screenY + 12 - bob);
+    ctx.moveTo(cx + 16, screenY + 14 - bob);
+    ctx.lineTo(cx + 22, screenY + 4 - bob);
+    ctx.lineTo(cx + 10, screenY + 12 - bob);
+    ctx.fill();
+
+    ctx.fillStyle = '#6b21a8';
+    ctx.beginPath();
+    ctx.roundRect(cx - 22, screenY + 16 - bob - legSwing * 0.5, 7, 18, 3);
+    ctx.roundRect(cx + 15, screenY + 16 - bob + legSwing * 0.5, 7, 18, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#4c1d95';
+    ctx.beginPath();
+    ctx.arc(cx + facing * 2, screenY + 9 - bob, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(cx - 2 + facing * 4, screenY + 8 - bob, 2, 0, Math.PI * 2);
+    ctx.arc(cx + 4 + facing * 4, screenY + 8 - bob, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (m.kind === 'stalker') {
+    ctx.fillStyle = '#18181b';
+    ctx.fillRect(cx - 8, screenY + 26 - bob, 6, 15 + legSwing);
+    ctx.fillRect(cx + 2, screenY + 26 - bob, 6, 15 - legSwing);
+
+    ctx.fillStyle = '#27272a';
+    ctx.beginPath();
+    ctx.roundRect(cx - 10 + facing * 2, screenY + 12 - bob, 20, 16, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 2;
+    const clawX = facing === 1 ? cx + 10 : cx - 10;
+    ctx.beginPath();
+    ctx.moveTo(clawX, screenY + 18 - bob);
+    ctx.lineTo(clawX + facing * 12, screenY + 22 - bob);
+    ctx.moveTo(clawX, screenY + 22 - bob);
+    ctx.lineTo(clawX + facing * 11, screenY + 27 - bob);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#3f3f46';
+    ctx.beginPath();
+    ctx.arc(cx + facing * 4, screenY + 8 - bob, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#d946ef';
+    ctx.beginPath();
+    ctx.arc(cx + facing * 7, screenY + 7 - bob, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else {
+    ctx.fillStyle = '#14532d';
+    ctx.fillRect(cx - 8, screenY + 27 - bob, 6, 14 + legSwing);
+    ctx.fillRect(cx + 2, screenY + 27 - bob, 6, 14 - legSwing);
+
+    ctx.fillStyle = '#166534';
+    ctx.beginPath();
+    ctx.roundRect(cx - 11, screenY + 12 - bob, 22, 17, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.arc(cx - facing * 6, screenY + 16 - bob, 5, 0, Math.PI * 2);
+    ctx.arc(cx - facing * 4, screenY + 23 - bob, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#15803d';
+    ctx.beginPath();
+    ctx.arc(cx + facing * 2, screenY + 7 - bob, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#a3e635';
+    ctx.beginPath();
+    ctx.arc(cx + facing * 6, screenY + 9 - bob, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const distToPlayer = Math.hypot((player.x + player.width / 2) - (m.x + m.width / 2), (player.y + player.height / 2) - (m.y + m.height / 2));
+  if (distToPlayer < 260 && !inIntro) {
+    ctx.fillStyle = m.kind === 'spitter' ? '#4ade80' : '#e879f9';
+    ctx.font = 'bold 10px Rajdhani, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.name.toUpperCase(), cx, screenY - 6 - bob);
+    ctx.textAlign = 'left';
+  }
+}
+
+function desenharProjeteisAcido() {
+  for (let p of acidProjectiles) {
+    const sx = p.x - camera.x;
+    const sy = p.y - camera.y;
+
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.35)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#a3e635';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = false, isNPC = false) {
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
@@ -1693,7 +2489,6 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
   }
 
-  // Peças da nave SÓ aparecem no radar depois que você conversa com os personagens e pede ajuda!
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     let mx = cx + (item.x - player.x) * scale;
@@ -1711,12 +2506,11 @@ function desenharMinimapa() {
       miniCtx.stroke();
       miniCtx.setLineDash([]);
     } else {
-      miniCtx.fillStyle = item.type === 'water' ? '#00ccff' : '#ff9900';
+      miniCtx.fillStyle = item.type === 'water' ? '#00ccff' : (item.type === 'flare' ? '#ef4444' : '#ff9900');
       miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
     }
   }
 
-  // Personagens que dão dicas aparecem em destaque laranja no radar
   miniCtx.fillStyle = '#ffaa00';
   for (let npc of npcs) {
     const mx = cx + (npc.x - player.x) * scale;
@@ -1750,6 +2544,17 @@ function desenharMinimapa() {
     }
   }
 
+  for (let m of monsters) {
+    const mx = cx + (m.x - player.x) * scale;
+    const my = cy + (m.y - player.y) * scale;
+    if (mx >= 0 && mx <= mw && my >= 0 && my <= mh) {
+      miniCtx.fillStyle = '#d946ef';
+      miniCtx.beginPath();
+      miniCtx.arc(mx, my, pulse + 1.2, 0, Math.PI * 2);
+      miniCtx.fill();
+    }
+  }
+
   miniCtx.fillStyle = 'rgba(0, 229, 255, 0.22)';
   miniCtx.beginPath();
   miniCtx.moveTo(cx, cy);
@@ -1777,19 +2582,74 @@ function desenharMinimapa() {
   miniCtx.fillText('L', mw - 8, cy + 3);
 }
 
+// ==========================================
+// ILUMINAÇÃO REALISTA + LANTERNA DIRECIONAL + CINZAS
+// ==========================================
 function desenharIluminacaoEClima() {
+  // Cinzas e brasas flutuando
+  for (let p of ashParticles) {
+    ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.28)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (inIntro) return;
+
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  const outerRadius = lifeYears <= 10 ? 290 : 380;
+  // Camada de escuridão atmosférica com recorte da lanterna tática
+  const lightCanvas = document.createElement('canvas');
+  lightCanvas.width = canvas.width;
+  lightCanvas.height = canvas.height;
+  const lCtx = lightCanvas.getContext('2d');
 
-  const gradient = ctx.createRadialGradient(screenPx, screenPy, 80, screenPx, screenPy, outerRadius);
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  gradient.addColorStop(0.75, 'rgba(10, 7, 5, 0.45)');
-  gradient.addColorStop(1, 'rgba(5, 3, 2, 0.85)');
+  lCtx.fillStyle = lifeYears <= 10 ? 'rgba(10, 4, 4, 0.84)' : 'rgba(6, 4, 3, 0.78)';
+  lCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  lCtx.globalCompositeOperation = 'destination-out';
+
+  // Halo natural ao redor do jogador
+  const selfGrad = lCtx.createRadialGradient(screenPx, screenPy, 25, screenPx, screenPy, 135);
+  selfGrad.addColorStop(0, 'rgba(0,0,0,1)');
+  selfGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  lCtx.fillStyle = selfGrad;
+  lCtx.beginPath();
+  lCtx.arc(screenPx, screenPy, 135, 0, Math.PI * 2);
+  lCtx.fill();
+
+  // Cone de luz da lanterna [F]
+  if (flashlightOn && !playerBoardedShip) {
+    const beamLen = 340;
+    const spread = 0.42;
+    const coneGrad = lCtx.createRadialGradient(screenPx, screenPy, 15, screenPx, screenPy, beamLen);
+    coneGrad.addColorStop(0, 'rgba(0,0,0,1)');
+    coneGrad.addColorStop(0.75, 'rgba(0,0,0,0.75)');
+    coneGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    lCtx.fillStyle = coneGrad;
+    lCtx.beginPath();
+    lCtx.moveTo(screenPx, screenPy);
+    lCtx.arc(screenPx, screenPy, beamLen, player.aimAngle - spread, player.aimAngle + spread);
+    lCtx.closePath();
+    lCtx.fill();
+  }
+
+  // Luz dos sinalizadores ativos
+  for (let f of activeFlares) {
+    const fx = f.x - camera.x;
+    const fy = f.y - camera.y;
+    const fGrad = lCtx.createRadialGradient(fx, fy, 10, fx, fy, 170);
+    fGrad.addColorStop(0, 'rgba(0,0,0,1)');
+    fGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    lCtx.fillStyle = fGrad;
+    lCtx.beginPath();
+    lCtx.arc(fx, fy, 170, 0, Math.PI * 2);
+    lCtx.fill();
+  }
+
+  ctx.drawImage(lightCanvas, 0, 0);
 
   if (flashDamage > 0) {
     ctx.fillStyle = `rgba(255, 0, 0, ${flashDamage * 0.08})`;
@@ -1815,6 +2675,7 @@ function desenhar() {
   }
 
   desenharCenario();
+  desenharSinalizadores();
 
   for (let item of itemsOnGround) {
     desenharItemChao(item);
@@ -1828,11 +2689,16 @@ function desenhar() {
     desenharPersonagemDetalhado(z.x, z.y, z, z.isMoving, true, false);
   }
 
-  if (!playerBoardedShip) {
+  for (let m of monsters) {
+    desenharMonstro(m);
+  }
+
+  desenharProjeteisAcido();
+
+  if (!playerBoardedShip && !inIntro) {
     desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
   }
 
   desenharTetosConstrucoes();
-
   desenharIluminacaoEClima();
 }

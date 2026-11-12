@@ -1,50 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OÁSIS DE SOBREVIVÊNCIA: TERRITÓRIO</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Último Respiro: Fuga da Terra</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- TELA INICIAL -->
-  <div id="login-screen" class="overlay-screen">
+  <div id="login-screen">
     <div class="login-box">
-      <h1 class="game-title">OÁSIS DE SOBREVIVÊNCIA</h1>
-      <p class="subtitle">Explore os escombros, recupere as 3 peças da nave e decole antes que seu tempo de vida acabe.</p>
-      
-      <div class="input-group">
-        <label for="player-name-input">NOME DO SOBREVIVENTE:</label>
-        <input type="text" id="player-name-input" placeholder="Digite seu codinome..." maxlength="15" />
+      <div class="badge-alert">ALERTA DE COLAPSO PLANETÁRIO</div>
+      <h1>ÚLTIMO RESPIRO</h1>
+      <p class="subtitle">FUGA DA TERRA</p>
+      <p class="desc">
+        A radiação temporal consome seus anos de vida. Converse com os sobreviventes para localizar as <strong>3 peças da Nave Aurora</strong>, desvie dos monstros mutantes e escape antes que seja tarde.
+      </p>
+      <input type="text" id="player-name-input" placeholder="Digite seu nome de sobrevivente..." maxlength="16">
+      <button class="btn-start" onclick="iniciarJogo()">INICIAR MISSÃO</button>
+      <div class="controls-preview">
+        <span>[WASD] Mover</span> • <span>[SHIFT] Correr</span> • <span>[F] Lanterna</span> • <span>[Q] Sinalizador</span> • <span>[E] Interagir</span>
       </div>
-
-      <button class="btn-start" onclick="iniciarJogo()">ENTRAR NO TERRITÓRIO</button>
-      
-      <div class="controls-hint">
-        <span>[W A S D] Mover</span>
-        <span>[E] Pegar Item / Falar / Ligar Nave</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- TELA DE GAME OVER -->
-  <div id="game-over-screen" class="overlay-screen" style="display: none;">
-    <div class="login-box" style="border-color: #ff0033; box-shadow: 0 0 40px rgba(255, 0, 51, 0.4);">
-      <h1 class="game-title" style="color: #ff0033;">TEMPO ESGOTADO</h1>
-      <p class="subtitle">Você não conseguiu preparar a nave antes que seu relógio biológico chegasse a zero.</p>
-      <button class="btn-start" style="background: #ff0033;" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
-    </div>
-  </div>
-
-  <!-- TELA DE VITÓRIA -->
-  <div id="victory-screen" class="overlay-screen" style="display: none;">
-    <div class="login-box" style="border-color: #00ff88; box-shadow: 0 0 40px rgba(0, 255, 136, 0.4);">
-      <h1 class="game-title" style="color: #00ff88;">DECOLAGEM CONCLUÍDA!</h1>
-      <p class="subtitle">Você escapou da atmosfera tóxica da Terra rumo à Estação Orbital! Sua expectativa de vida foi restaurada.</p>
-      <p id="victory-stats" style="color: #ffcc00; font-family: 'Press Start 2P', monospace; font-size: 11px; margin-bottom: 20px;"></p>
-      <button class="btn-start" style="background: #00ff88; color: #05110a;" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
     </div>
   </div>
 
@@ -52,81 +30,112 @@
   <div id="game-ui" style="display: none;">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- HUD SUPERIOR -->
-    <div id="hud">
-      <div class="hud-card">
-        <span class="hud-label">SOBREVIVENTE</span>
-        <span id="display-player-name" class="hud-value">---</span>
-      </div>
-      <div class="hud-card">
-        <span class="hud-label">TEMPO DE VIDA</span>
-        <span id="life-span" class="hud-value">35 Anos</span>
-      </div>
-
-      <!-- BARRA DE FOME -->
-      <div class="hud-card" style="border-left-color: #ff9900; min-width: 115px;">
-        <span class="hud-label">FOME <span id="hunger-text" style="color:#ff9900;">100%</span></span>
-        <div class="mini-stat-bar">
-          <div id="hunger-bar" class="mini-stat-fill" style="width: 100%; background: #ff9900;"></div>
+    <!-- OVERLAY DA CENA DE INTRODUÇÃO (10 SEGUNDOS) -->
+    <div id="intro-overlay" style="display: none;">
+      <div class="intro-radio-box">
+        <div class="radio-header">
+          <span class="rec-dot"></span> TRANSMISSÃO DE EMERGÊNCIA — COMPUTADOR DE BORDO AURORA
+        </div>
+        <p id="intro-subtitle">Iniciando sequência de pouso forçado...</p>
+        <div class="intro-footer">
+          <span id="intro-timer">10s</span>
+          <button class="btn-skip" onclick="pularIntroducao()">Pular Cena [ENTER]</button>
         </div>
       </div>
+    </div>
 
-      <!-- BARRA DE SEDE -->
-      <div class="hud-card" style="border-left-color: #00ccff; min-width: 115px;">
-        <span class="hud-label">SEDE <span id="thirst-text" style="color:#00ccff;">100%</span></span>
-        <div class="mini-stat-bar">
-          <div id="thirst-bar" class="mini-stat-fill" style="width: 100%; background: #00ccff;"></div>
+    <!-- HUD SUPERIOR ESQUERDO -->
+    <div id="hud-top-left">
+      <div class="player-card">
+        <div class="player-header">
+          <span id="display-player-name">Sobrevivente</span>
+          <span id="life-span">35 Anos</span>
+        </div>
+
+        <div class="stat-row">
+          <span class="stat-label">FOME</span>
+          <div class="bar-bg"><div id="hunger-bar" class="bar-fill" style="width: 100%; background: #ff9900;"></div></div>
+          <span id="hunger-text" class="stat-val">100%</span>
+        </div>
+
+        <div class="stat-row">
+          <span class="stat-label">SEDE</span>
+          <div class="bar-bg"><div id="thirst-bar" class="bar-fill" style="width: 100%; background: #00ccff;"></div></div>
+          <span id="thirst-text" class="stat-val">100%</span>
+        </div>
+
+        <div class="stat-row">
+          <span class="stat-label">ENERGIA</span>
+          <div class="bar-bg"><div id="stamina-bar" class="bar-fill" style="width: 100%; background: #22c55e;"></div></div>
+          <span id="stamina-text" class="stat-val">100%</span>
+        </div>
+
+        <div id="status-slow" class="badge-slow" style="display: none;">EXAUSTO (VELOCIDADE REDUZIDA)</div>
+      </div>
+
+      <div class="mission-card">
+        <div class="mission-row">
+          <span>PEÇAS DA NAVE:</span>
+          <strong id="parts-val">0/3</strong>
+        </div>
+        <div class="mission-row">
+          <span>SINALIZADORES [Q]:</span>
+          <strong id="flares-val">2</strong>
+        </div>
+        <div class="mission-row">
+          <span>LANTERNA [F]:</span>
+          <strong id="flashlight-val" style="color: #38bdf8;">LIGADA</strong>
         </div>
       </div>
+    </div>
 
-      <div class="hud-card" style="border-left-color: #00ff88;">
-        <span class="hud-label">PEÇAS DA NAVE</span>
-        <span id="parts-val" class="hud-value" style="color: #00ff88;">0/3</span>
-      </div>
-
-      <div id="status-slow" class="hud-card slow-badge" style="display: none;">
-        EXAUSTO (LENTO)
-      </div>
-
+    <!-- HUD SUPERIOR DIREITO (RADAR + SOM) -->
+    <div id="hud-top-right">
       <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
-    </div>
-
-    <!-- MINIMAPA NO CANTO SUPERIOR DIREITO -->
-    <div id="minimap-container">
-      <div class="minimap-header">RADAR DA PLATAFORMA</div>
-      <canvas id="minimapCanvas" width="160" height="160"></canvas>
-      <div class="minimap-legend">
-        <span style="color:#00e5ff;">● Você</span>
-        <span style="color:#38bdf8;">○ Sinal</span>
-        <span style="color:#ffcc00;">▲ Nave</span>
-        <span style="color:#ff0033;">● Zumbi</span>
+      <div class="radar-frame">
+        <canvas id="minimapCanvas" width="145" height="145"></canvas>
+        <div class="radar-label">RADAR TÁTICO</div>
       </div>
     </div>
 
-    <!-- NOTIFICAÇÃO DE COLETA -->
-    <div id="item-popup" style="display: none;"></div>
+    <!-- PROMPT DE INTERAÇÃO -->
+    <div id="interaction-prompt" style="display: none;"></div>
 
-    <!-- BARRA DE PROGRESSO DA DECOLAGEM -->
+    <!-- BARRA DE AQUECIMENTO DA NAVE -->
     <div id="tower-progress-box" style="display: none;">
-      <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ff9900; margin-bottom: 8px;">AQUECENDO PROPULSORES... (BARULHO ATRAINDO ZUMBIS!)</div>
-      <div class="progress-bar-bg">
+      <div class="progress-title">AQUECENDO PROPULSORES DA NAVE AURORA...</div>
+      <div class="progress-outer">
         <div id="tower-progress-fill"></div>
       </div>
     </div>
 
-    <!-- AVISO DE INTERAÇÃO -->
-    <div id="interaction-prompt" style="display: none;">
-      Pressione <span class="key-highlight">[E]</span> para interagir
+    <!-- POPUP DE NOTIFICAÇÃO -->
+    <div id="item-popup" style="display: none;"></div>
+
+    <!-- CAIXA DE DIÁLOGO COM NPC -->
+    <div id="dialog-box" style="display: none;">
+      <div id="npc-name">Sobrevivente</div>
+      <p id="npc-text"></p>
+      <div id="dialog-options"></div>
     </div>
 
-    <!-- CAIXA DE DIÁLOGO -->
-    <div id="dialog-box" style="display: none;">
-      <div class="dialog-header">
-        <span id="npc-name">SOBREVIVENTE</span>
-        <button class="btn-close" onclick="fecharDialogo()">X</button>
+    <!-- TELA DE GAME OVER -->
+    <div id="game-over-screen" class="end-screen" style="display: none;">
+      <div class="end-box gameover">
+        <h2>SEU TEMPO ACABOU</h2>
+        <p>A radiação e os monstros da Terra consumiram seus últimos anos de vida.</p>
+        <button class="btn-start" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
       </div>
-      <p id="npc-text">...</p>
-      <div id="dialog-options" class="options-grid"></div>
+    </div>
+
+    <!-- TELA DE VITÓRIA -->
+    <div id="victory-screen" class="end-screen" style="display: none;">
+      <div class="end-box victory">
+        <h2>FUGA CONCLUÍDA!</h2>
+        <p>Você reparou a Cápsula Orbital Aurora e escapou do colapso da Terra.</p>
+        <p id="victory-stats" class="stats-highlight"></p>
+        <button class="btn-start" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
+      </div>
     </div>
   </div>
 

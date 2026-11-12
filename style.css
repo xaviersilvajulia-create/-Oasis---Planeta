@@ -1,385 +1,531 @@
 * {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
   user-select: none;
 }
 
 body {
-  background-color: #0d0a08;
-  color: #f4ece6;
+  background: #0b0806;
+  color: #f8fafc;
   font-family: 'Rajdhani', sans-serif;
   overflow: hidden;
   width: 100vw;
   height: 100vh;
 }
 
-#gameCanvas {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-}
-
-/* TELAS DE OVERLAY */
-.overlay-screen {
+/* TELA DE LOGIN */
+#login-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at center, #2b1810 0%, #090605 100%);
+  inset: 0;
+  background: radial-gradient(circle at center, #291810 0%, #090605 100%);
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   z-index: 100;
+  padding: 20px;
 }
 
 .login-box {
-  background: rgba(20, 14, 11, 0.92);
+  background: rgba(18, 13, 10, 0.94);
   border: 2px solid #ff5500;
-  border-radius: 12px;
-  padding: 40px 50px;
+  box-shadow: 0 0 40px rgba(255, 85, 0, 0.3);
+  border-radius: 10px;
+  padding: 32px;
   max-width: 520px;
-  width: 90%;
+  width: 100%;
   text-align: center;
-  box-shadow: 0 0 40px rgba(255, 85, 0, 0.25);
 }
 
-.game-title {
+.badge-alert {
+  display: inline-block;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+
+.login-box h1 {
   font-family: 'Press Start 2P', monospace;
-  font-size: 20px;
+  font-size: 24px;
   color: #ff6a00;
-  line-height: 1.5;
-  margin-bottom: 16px;
-  text-shadow: 0 0 12px rgba(255, 106, 0, 0.6);
+  text-shadow: 0 3px 0 #451a03;
+  margin-bottom: 8px;
 }
 
 .subtitle {
   font-size: 16px;
-  color: #cbb8ac;
-  margin-bottom: 28px;
-  line-height: 1.4;
+  letter-spacing: 5px;
+  color: #cbd5e1;
+  margin-bottom: 18px;
 }
 
-.input-group {
-  text-align: left;
-  margin-bottom: 24px;
+.desc {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #d6d3d1;
+  margin-bottom: 22px;
 }
 
-.input-group label {
-  display: block;
-  font-size: 13px;
-  letter-spacing: 1.5px;
-  color: #ff9966;
-  margin-bottom: 8px;
-}
-
-.input-group input {
+#player-name-input {
   width: 100%;
-  padding: 12px 16px;
-  background: #120c09;
-  border: 1px solid #593a2b;
+  padding: 12px 14px;
+  background: #140f0c;
+  border: 1px solid #57534e;
   border-radius: 6px;
   color: #fff;
   font-family: 'Rajdhani', sans-serif;
-  font-size: 18px;
+  font-size: 17px;
+  margin-bottom: 16px;
   outline: none;
-  transition: border-color 0.2s;
 }
 
-.input-group input:focus {
+#player-name-input:focus {
   border-color: #ff6a00;
 }
 
 .btn-start {
   width: 100%;
-  padding: 15px;
-  background: linear-gradient(90deg, #ff4500, #ff7b00);
+  padding: 14px;
+  background: linear-gradient(135deg, #ff5500, #c2410c);
   border: none;
   border-radius: 6px;
   color: #fff;
   font-family: 'Press Start 2P', monospace;
   font-size: 12px;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition: transform 0.15s, filter 0.15s;
 }
 
 .btn-start:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 85, 0, 0.45);
+  filter: brightness(1.15);
+  transform: translateY(-1px);
 }
 
-.controls-hint {
-  margin-top: 24px;
-  display: flex;
-  justify-content: space-around;
+.controls-preview {
+  margin-top: 18px;
   font-size: 13px;
-  color: #9e877a;
-  border-top: 1px solid #2e2019;
-  padding-top: 14px;
-}
-
-/* HUD SUPERIOR */
-#hud {
-  position: fixed;
-  top: 16px;
-  left: 16px;
+  color: #a8a29e;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  z-index: 20;
-  max-width: calc(100vw - 220px);
+  justify-content: center;
+  gap: 8px;
 }
 
-.hud-card {
-  background: rgba(18, 13, 10, 0.88);
-  border: 1px solid #453024;
-  border-left: 4px solid #ff5500;
-  padding: 8px 12px;
-  border-radius: 6px;
+/* CANVAS */
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* OVERLAY DE INTRODUÇÃO CINEMATOGRÁFICA */
+#intro-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 36px;
+  z-index: 60;
+  box-shadow: inset 0 65px 0 #000, inset 0 -65px 0 #000;
+}
+
+.intro-radio-box {
+  pointer-events: auto;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #38bdf8;
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  padding: 16px 22px;
+  max-width: 640px;
+  width: 90%;
+}
+
+.radio-header {
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: #38bdf8;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.2; }
+}
+
+#intro-subtitle {
+  font-size: 18px;
+  color: #f1f5f9;
+  line-height: 1.4;
+  min-height: 48px;
+}
+
+.intro-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+}
+
+#intro-timer {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #facc15;
+}
+
+.btn-skip {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #64748b;
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-skip:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+}
+
+/* HUD SUPERIOR ESQUERDO */
+#hud-top-left {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 20;
+}
+
+.player-card, .mission-card {
+  background: rgba(15, 11, 9, 0.88);
+  border: 1px solid rgba(255, 115, 0, 0.45);
+  border-radius: 8px;
+  padding: 12px 14px;
+  width: 255px;
   backdrop-filter: blur(4px);
 }
 
-.hud-label {
-  display: block;
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: #a89285;
-  margin-bottom: 3px;
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 17px;
+  font-weight: 700;
 }
 
-.hud-value {
+#life-span {
   font-family: 'Press Start 2P', monospace;
   font-size: 11px;
   color: #fff;
 }
 
-/* BARRAS DE FOME E SEDE */
-.mini-stat-bar {
-  width: 100%;
-  height: 7px;
-  background: #1a120d;
-  border: 1px solid #3d2c22;
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  width: 56px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.bar-bg {
+  flex: 1;
+  height: 8px;
+  background: #292524;
   border-radius: 4px;
   overflow: hidden;
-  margin-top: 4px;
 }
 
-.mini-stat-fill {
+.bar-fill {
   height: 100%;
-  transition: width 0.2s ease;
+  transition: width 0.2s;
 }
 
-.slow-badge {
-  border-left-color: #ff3333;
-  color: #ff4444;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 9px;
-  animation: pulseBadge 1s infinite alternate;
+.stat-val {
+  width: 38px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-@keyframes pulseBadge {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
+.badge-slow {
+  margin-top: 6px;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  padding: 3px;
+  border-radius: 4px;
+}
+
+.mission-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.mission-row:last-child {
+  margin-bottom: 0;
+}
+
+.mission-row strong {
+  color: #00e5ff;
+}
+
+/* HUD SUPERIOR DIREITO */
+#hud-top-right {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 20;
 }
 
 .btn-audio {
-  background: rgba(18, 13, 10, 0.88);
-  border: 1px solid #ff5500;
-  color: #ffcc00;
+  background: rgba(15, 11, 9, 0.9);
+  border: 1px solid #ff6a00;
+  color: #fff;
   font-family: 'Press Start 2P', monospace;
   font-size: 9px;
-  padding: 10px 12px;
+  padding: 7px 10px;
   border-radius: 6px;
   cursor: pointer;
 }
 
-.btn-audio:hover {
-  background: #ff5500;
-  color: #fff;
-}
-
-/* MINIMAPA NO CANTO SUPERIOR DIREITO */
-#minimap-container {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  background: rgba(14, 10, 8, 0.94);
-  border: 2px solid #593a2b;
-  border-radius: 8px;
-  padding: 8px;
-  z-index: 30;
+.radar-frame {
+  background: rgba(12, 9, 7, 0.92);
+  border: 2px solid #ff5500;
+  border-radius: 10px;
+  padding: 6px;
   text-align: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75);
-}
-
-.minimap-header {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
-  color: #ff884d;
-  margin-bottom: 6px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
 }
 
 #minimapCanvas {
-  border: 1px solid #332219;
-  border-radius: 4px;
   display: block;
+  border-radius: 6px;
 }
 
-.minimap-legend {
-  margin-top: 6px;
-  display: flex;
-  justify-content: space-between;
+.radar-label {
   font-size: 10px;
-  font-weight: bold;
+  letter-spacing: 1.5px;
+  color: #fdba74;
+  margin-top: 4px;
+  font-weight: 700;
 }
 
-/* POPUP DE ITEM */
-#item-popup {
+/* PROMPTS E POPUPS */
+#interaction-prompt {
   position: fixed;
-  top: 84px;
+  bottom: 95px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 25, 20, 0.95);
-  border: 1px solid #00ff88;
-  color: #00ff88;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 11px;
-  padding: 12px 20px;
+  background: rgba(15, 11, 9, 0.92);
+  border: 1px solid #facc15;
+  padding: 10px 18px;
   border-radius: 6px;
-  z-index: 30;
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  font-size: 16px;
+  font-weight: 700;
+  z-index: 25;
 }
 
-/* BARRA DE PROGRESSO DA DECOLAGEM */
+.key-highlight {
+  color: #facc15;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+}
+
 #tower-progress-box {
   position: fixed;
-  bottom: 90px;
+  bottom: 145px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(18, 13, 10, 0.94);
-  border: 1px solid #ff9900;
-  padding: 14px 22px;
+  background: rgba(15, 11, 9, 0.94);
+  border: 2px solid #00ff88;
+  padding: 12px 20px;
   border-radius: 8px;
+  width: 340px;
   text-align: center;
-  z-index: 25;
-  width: 380px;
+  z-index: 26;
 }
 
-.progress-bar-bg {
+.progress-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.progress-outer {
   width: 100%;
   height: 12px;
-  background: #1a120d;
+  background: #1e293b;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #593a2b;
 }
 
 #tower-progress-fill {
   width: 0%;
   height: 100%;
-  background: linear-gradient(90deg, #ff5500, #00ff88);
+  background: linear-gradient(90deg, #00e5ff, #00ff88);
 }
 
-/* PROMPT DE INTERAÇÃO */
-#interaction-prompt {
+#item-popup {
   position: fixed;
-  bottom: 32px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(18, 13, 10, 0.92);
-  border: 1px solid #ff6a00;
-  padding: 12px 24px;
-  border-radius: 30px;
-  font-size: 15px;
-  color: #f4ece6;
-  z-index: 20;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #00e5ff;
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  z-index: 40;
 }
 
-.key-highlight {
-  color: #ffcc00;
-  font-weight: bold;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 12px;
-}
-
-/* CAIXA DE DIÁLOGO */
+/* DIÁLOGO */
 #dialog-box {
   position: fixed;
-  bottom: 30px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  width: 90%;
-  max-width: 640px;
-  background: rgba(18, 13, 10, 0.96);
+  background: rgba(14, 10, 8, 0.96);
   border: 2px solid #ff6a00;
   border-radius: 10px;
-  padding: 22px 26px;
+  padding: 18px 22px;
+  width: 92%;
+  max-width: 580px;
   z-index: 50;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85);
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #3d281d;
-  padding-bottom: 10px;
-  margin-bottom: 14px;
 }
 
 #npc-name {
   font-family: 'Press Start 2P', monospace;
   font-size: 12px;
-  color: #ff884d;
-}
-
-.btn-close {
-  background: transparent;
-  border: 1px solid #664433;
-  color: #cbb8ac;
-  padding: 4px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.btn-close:hover {
-  background: #ff4500;
-  color: #fff;
+  color: #facc15;
+  margin-bottom: 10px;
 }
 
 #npc-text {
   font-size: 17px;
-  line-height: 1.5;
-  color: #f0e6df;
-  margin-bottom: 18px;
+  line-height: 1.45;
+  margin-bottom: 14px;
+  color: #f1f5f9;
 }
 
-.options-grid {
+#dialog-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .btn-oasis {
-  background: #241812;
-  border: 1px solid #6b4430;
-  color: #f4ece6;
-  padding: 12px 16px;
+  background: rgba(255, 106, 0, 0.16);
+  border: 1px solid #ff6a00;
+  color: #fff;
+  padding: 10px 14px;
   border-radius: 6px;
   text-align: left;
   font-family: 'Rajdhani', sans-serif;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
 
 .btn-oasis:hover {
-  background: #ff5500;
-  border-color: #ff884d;
-  color: #fff;
+  background: rgba(255, 106, 0, 0.35);
+}
+
+/* TELAS FINAIS */
+.end-screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 3, 2, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 20px;
+}
+
+.end-box {
+  background: #140e0b;
+  border-radius: 10px;
+  padding: 32px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+}
+
+.end-box.gameover {
+  border: 2px solid #ef4444;
+}
+
+.end-box.gameover h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  color: #ef4444;
+  margin-bottom: 14px;
+}
+
+.end-box.victory {
+  border: 2px solid #00ff88;
+}
+
+.end-box.victory h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  color: #00ff88;
+  margin-bottom: 14px;
+}
+
+.end-box p {
+  font-size: 17px;
+  color: #e2e8f0;
+  margin-bottom: 18px;
+  line-height: 1.4;
+}
+
+.stats-highlight {
+  color: #00e5ff !important;
+  font-weight: 700;
 }
