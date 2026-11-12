@@ -150,7 +150,7 @@ const shelters = [
   { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
 ];
 
-// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO (COM PORTA ABERTA E INTERIOR DETALHADO)
+// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO
 const buildings = [
   {
     x: 780, y: 1080, w: 170, h: 145,
@@ -179,7 +179,7 @@ const buildings = [
   }
 ];
 
-// CARROS DESTRUÍDOS PELO CAMINHO (COM COLISÃO E ALGUNS PEGANDO FOGO)
+// CARROS DESTRUÍDOS PELO CAMINHO
 const wreckedCars = [
   { x: 1280, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
   { x: 960, y: 940, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
@@ -189,7 +189,6 @@ const wreckedCars = [
   { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// SUPRIMENTOS (INCLUINDO ITENS DENTRO DAS CONSTRUÇÕES PARA INCENTIVAR ENTRAR)
 const itemsOnGround = [
   { id: 1, x: 1150, y: 880, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
   { id: 2, x: 840, y: 1130, type: 'med', name: 'Kit Cirúrgico (Interior)', years: 6, supp: 15, collected: false },
@@ -358,12 +357,10 @@ function atualizarSomTensao() {
   }
 }
 
-// GERA OS SEGMENTOS SÓLIDOS DAS PAREDES (DEIXANDO A PORTA ABERTA PARA ENTRAR)
 function obterParedesConstrucao(b) {
-  const t = 10; // Espessura da parede
+  const t = 10;
   const walls = [];
 
-  // Parede Superior
   if (b.doorSide === 'top') {
     walls.push({ x: b.x, y: b.y, w: b.doorPos, h: t });
     walls.push({ x: b.x + b.doorPos + b.doorWidth, y: b.y, w: b.w - (b.doorPos + b.doorWidth), h: t });
@@ -371,7 +368,6 @@ function obterParedesConstrucao(b) {
     walls.push({ x: b.x, y: b.y, w: b.w, h: t });
   }
 
-  // Parede Inferior
   if (b.doorSide === 'bottom') {
     walls.push({ x: b.x, y: b.y + b.h - t, w: b.doorPos, h: t });
     walls.push({ x: b.x + b.doorPos + b.doorWidth, y: b.y + b.h - t, w: b.w - (b.doorPos + b.doorWidth), h: t });
@@ -379,7 +375,6 @@ function obterParedesConstrucao(b) {
     walls.push({ x: b.x, y: b.y + b.h - t, w: b.w, h: t });
   }
 
-  // Parede Esquerda
   if (b.doorSide === 'left') {
     walls.push({ x: b.x, y: b.y, w: t, h: b.doorPos });
     walls.push({ x: b.x, y: b.y + b.doorPos + b.doorWidth, w: t, h: b.h - (b.doorPos + b.doorWidth) });
@@ -387,7 +382,6 @@ function obterParedesConstrucao(b) {
     walls.push({ x: b.x, y: b.y, w: t, h: b.h });
   }
 
-  // Parede Direita
   if (b.doorSide === 'right') {
     walls.push({ x: b.x + b.w - t, y: b.y, w: t, h: b.doorPos });
     walls.push({ x: b.x + b.w - t, y: b.y + b.doorPos + b.doorWidth, w: t, h: b.h - (b.doorPos + b.doorWidth) });
@@ -398,16 +392,14 @@ function obterParedesConstrucao(b) {
   return walls;
 }
 
-// VERIFICA SE O JOGADOR ESTÁ DENTRO DA CONSTRUÇÃO
 function jogadorDentroDe(b) {
   const cx = player.x + player.width / 2;
   const cy = player.y + player.height / 2;
   return cx > b.x && cx < b.x + b.w && cy > b.y && cy < b.y + b.h;
 }
 
-// COLISÃO COM AS PAREDES DAS CONSTRUÇÕES (PORTA LIVRE) E CARROS DESTRUÍDOS
+// COLISÃO DO JOGADOR (PODE ENTRAR NOS ESCONDERIJOS E PELAS PORTAS DAS CONSTRUÇÕES)
 function checarColisaoObstaculos(nextX, nextY) {
-  // Usa a hitbox dos pés do personagem para entrar pela porta com facilidade
   const footX = nextX + 4;
   const footY = nextY + 18;
   const footW = player.width - 8;
@@ -437,6 +429,50 @@ function checarColisaoObstaculos(nextX, nextY) {
       return true;
     }
   }
+  return false;
+}
+
+// BARREIRA EXCLUSIVA PARA ZUMBIS (PROÍBE ENTRAR NOS ESCONDERIJOS E ATRAVESSAR OBSTÁCULOS)
+function checarColisaoZumbi(nextX, nextY, z) {
+  // 1. Bloqueia entrada nos esconderijos (com margem de segurança de 6px)
+  for (let s of shelters) {
+    if (
+      nextX < s.x + s.width + 6 &&
+      nextX + z.width > s.x - 6 &&
+      nextY < s.y + s.height + 6 &&
+      nextY + z.height > s.y - 6
+    ) {
+      return true;
+    }
+  }
+
+  // 2. Bloqueia atravessar paredes das construções
+  for (let b of buildings) {
+    const walls = obterParedesConstrucao(b);
+    for (let w of walls) {
+      if (
+        nextX < w.x + w.w &&
+        nextX + z.width > w.x &&
+        nextY < w.y + w.h &&
+        nextY + z.height > w.y
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // 3. Bloqueia atravessar carros destruídos
+  for (let c of wreckedCars) {
+    if (
+      nextX < c.x + c.w &&
+      nextX + z.width > c.x &&
+      nextY < c.y + c.h &&
+      nextY + z.height > c.y
+    ) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -525,8 +561,27 @@ function atualizarZumbis() {
       }
     }
 
-    z.x += z.vx;
-    z.y += z.vy;
+    // Move o zumbi respeitando a barreira dos esconderijos e obstáculos
+    let blocked = false;
+    if (!checarColisaoZumbi(z.x + z.vx, z.y, z)) {
+      z.x += z.vx;
+    } else {
+      blocked = true;
+    }
+
+    if (!checarColisaoZumbi(z.x, z.y + z.vy, z)) {
+      z.y += z.vy;
+    } else {
+      blocked = true;
+    }
+
+    // Se encostar na borda de um esconderijo ou obstáculo, vira para longe
+    if (blocked) {
+      z.vx = -z.vx;
+      z.vy = -z.vy;
+      z.facing = z.vx >= 0 ? 1 : -1;
+      z.patrolTimer = 0;
+    }
   }
 }
 
@@ -745,7 +800,7 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
 }
 
 // ==========================================
-// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO (CHÃO, MÓVEIS E TETO CUTAWAY)
+// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO
 // ==========================================
 function desenharConstrucaoInterior(b) {
   const bx = b.x - camera.x;
@@ -755,15 +810,12 @@ function desenharConstrucaoInterior(b) {
 
   const isInside = jogadorDentroDe(b);
 
-  // 1. Sombra externa da construção
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.fillRect(bx + 8, by + 10, b.w, b.h);
 
-  // 2. Piso interno (Azulejo quebrado na clínica/lab, madeira/concreto nas casas)
   ctx.fillStyle = b.type === 'clinic' ? '#2c343b' : '#2d241e';
   ctx.fillRect(bx, by, b.w, b.h);
 
-  // Grade de piso interno (azulejos ou tábuas)
   ctx.strokeStyle = b.type === 'clinic' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.28)';
   ctx.lineWidth = 1;
   for (let px = bx + 20; px < bx + b.w; px += 20) {
@@ -773,32 +825,26 @@ function desenharConstrucaoInterior(b) {
     ctx.beginPath(); ctx.moveTo(bx, py); ctx.lineTo(bx + b.w, py); ctx.stroke();
   }
 
-  // 3. Mobiliário e detalhes internos visíveis
   if (b.type === 'clinic') {
-    // Maca hospitalar quebrada no canto superior direito
     ctx.fillStyle = '#5a6875';
     ctx.fillRect(bx + b.w - 52, by + 18, 36, 18);
-    ctx.fillStyle = '#8b2635'; // Lençol manchado
+    ctx.fillStyle = '#8b2635';
     ctx.fillRect(bx + b.w - 48, by + 21, 24, 12);
 
-    // Armário de remédios tombado no canto esquerdo
     ctx.fillStyle = '#475569';
     ctx.fillRect(bx + 16, by + 18, 22, 34);
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
     ctx.strokeRect(bx + 16, by + 18, 22, 34);
   } else if (b.type === 'house') {
-    // Tapete rasgado no centro
     ctx.fillStyle = '#4a2520';
     ctx.fillRect(bx + b.w / 2 - 28, by + b.h / 2 - 18, 56, 36);
 
-    // Mesa quebrada e cadeira tombada
     ctx.fillStyle = '#5c3d28';
     ctx.fillRect(bx + 20, by + 20, 34, 22);
     ctx.fillStyle = '#3d281a';
     ctx.fillRect(bx + b.w - 44, by + 22, 24, 24);
   } else {
-    // Caixotes de madeira e barris enferrujados no depósito
     ctx.fillStyle = '#6b492b';
     ctx.fillRect(bx + 18, by + 20, 26, 26);
     ctx.strokeStyle = '#2b1d10';
@@ -810,7 +856,6 @@ function desenharConstrucaoInterior(b) {
     ctx.fill();
   }
 
-  // Rachaduras e entulho no chão interno
   ctx.strokeStyle = '#14100d';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -819,7 +864,6 @@ function desenharConstrucaoInterior(b) {
   ctx.lineTo(bx + 70, by + b.h - 35);
   ctx.stroke();
 
-  // 4. Paredes externas sólidas com abertura da porta
   const walls = obterParedesConstrucao(b);
   ctx.fillStyle = '#59463a';
   ctx.strokeStyle = '#1c1511';
@@ -832,7 +876,6 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeRect(wx, wy, w.w, w.h);
   }
 
-  // Soleira da porta (indicando claramente por onde entrar)
   ctx.fillStyle = 'rgba(255, 204, 0, 0.22)';
   if (b.doorSide === 'bottom') {
     ctx.fillRect(bx + b.doorPos, by + b.h - 10, b.doorWidth, 10);
@@ -842,31 +885,26 @@ function desenharConstrucaoInterior(b) {
     ctx.fillRect(bx, by + b.doorPos, 10, b.doorWidth);
   }
 
-  // 5. Fogo queimando na estrutura (canto sem bloquear a porta)
   if (b.onFire) {
     desenharFogoAnimado(bx + b.w - 28, by + 32, 0.9);
   }
 
-  // Placa identificando o prédio na fachada
   ctx.fillStyle = isInside ? '#00ff88' : '#d6c3b3';
   ctx.font = '8px "Press Start 2P"';
   ctx.fillText(isInside ? `${b.title} (INTERIOR)` : b.title, bx + 12, by - 6);
 }
 
-// Teto semi-transparente que abre quando você entra na construção
 function desenharTetosConstrucoes() {
   for (let b of buildings) {
-    if (jogadorDentroDe(b)) continue; // Revela todo o interior quando entra!
+    if (jogadorDentroDe(b)) continue;
 
     const bx = b.x - camera.x;
     const by = b.y - camera.y;
     if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) continue;
 
-    // Cobertura parcial com buraco grande no teto quebrado (deixa espiar o interior de fora)
     ctx.fillStyle = 'rgba(38, 29, 24, 0.68)';
     ctx.beginPath();
     ctx.rect(bx + 10, by + 10, b.w - 20, b.h - 20);
-    // Buraco irregular no meio do telhado destruído
     ctx.moveTo(bx + 35, by + 35);
     ctx.lineTo(bx + b.w - 40, by + 30);
     ctx.lineTo(bx + b.w - 30, by + b.h - 35);
@@ -936,7 +974,7 @@ function desenharCarroDestruido(c) {
 }
 
 function desenharCenario() {
-  // Esconderijos
+  // Esconderijos (zona fechada para zumbis, aberta para o jogador)
   for (let s of shelters) {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
@@ -965,17 +1003,14 @@ function desenharCenario() {
     ctx.fillText('ABRIGO SEGURO', sx + 8, sy + 18);
   }
 
-  // Construções exploráveis (piso, móveis e paredes com porta)
   for (let b of buildings) {
     desenharConstrucaoInterior(b);
   }
 
-  // Carros destruídos
   for (let c of wreckedCars) {
     desenharCarroDestruido(c);
   }
 
-  // Torres de Transmissão
   for (let t of towers) {
     const tx = t.x - camera.x;
     const ty = t.y - camera.y;
@@ -1195,7 +1230,6 @@ function desenharMinimapa() {
   miniCtx.lineTo(cx + Math.cos(sweepAngle) * 62, cy + Math.sin(sweepAngle) * 62);
   miniCtx.stroke();
 
-  // Construções exploráveis no minimapa
   miniCtx.fillStyle = 'rgba(130, 115, 105, 0.55)';
   for (let b of buildings) {
     const mx = cx + (b.x - player.x) * scale;
@@ -1203,7 +1237,6 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx, my, Math.max(4, b.w * scale), Math.max(4, b.h * scale));
   }
 
-  // Carros destruídos no minimapa
   miniCtx.fillStyle = 'rgba(180, 110, 75, 0.65)';
   for (let c of wreckedCars) {
     const mx = cx + (c.x - player.x) * scale;
@@ -1211,7 +1244,6 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
   }
 
-  // Esconderijos
   for (let s of shelters) {
     const mx = cx + (s.x - player.x) * scale;
     const my = cy + (s.y - player.y) * scale;
@@ -1222,7 +1254,6 @@ function desenharMinimapa() {
     miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
   }
 
-  // Suprimentos
   miniCtx.fillStyle = '#38bdf8';
   for (let item of itemsOnGround) {
     if (item.collected) continue;
@@ -1231,7 +1262,6 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
   }
 
-  // Sobreviventes NPCs
   miniCtx.fillStyle = '#ff8800';
   for (let npc of npcs) {
     if (npc.solved) continue;
@@ -1242,7 +1272,6 @@ function desenharMinimapa() {
     miniCtx.fill();
   }
 
-  // Torres
   for (let t of towers) {
     let mx = cx + (t.x - player.x) * scale;
     let my = cy + (t.y - player.y) * scale;
@@ -1258,7 +1287,6 @@ function desenharMinimapa() {
     miniCtx.fill();
   }
 
-  // Zumbis
   const pulse = 2.5 + Math.sin(animFrame * 0.15) * 0.6;
   for (let z of zombies) {
     const mx = cx + (z.x - player.x) * scale;
@@ -1271,7 +1299,6 @@ function desenharMinimapa() {
     }
   }
 
-  // Cone de visão do jogador
   miniCtx.fillStyle = 'rgba(0, 204, 255, 0.18)';
   miniCtx.beginPath();
   miniCtx.moveTo(cx, cy);
@@ -1283,7 +1310,6 @@ function desenharMinimapa() {
   miniCtx.closePath();
   miniCtx.fill();
 
-  // Jogador no centro
   miniCtx.fillStyle = '#00ccff';
   miniCtx.beginPath();
   miniCtx.arc(cx, cy, 3.8, 0, Math.PI * 2);
@@ -1292,7 +1318,6 @@ function desenharMinimapa() {
   miniCtx.lineWidth = 1.2;
   miniCtx.stroke();
 
-  // Pontos cardeais
   miniCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
   miniCtx.font = 'bold 8px Rajdhani, sans-serif';
   miniCtx.fillText('N', cx - 3, 9);
@@ -1355,7 +1380,6 @@ function desenhar() {
 
   desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
 
-  // Teto parcial das construções (some automaticamente quando você entra)
   desenharTetosConstrucoes();
 
   desenharIluminacaoEClima();
