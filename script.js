@@ -1,12 +1,13 @@
 let canvas, ctx, miniCanvas, miniCtx;
 let playerName = "Sobrevivente";
-let lifeYears = 40;
+let lifeYears = 35; // Expectativa de vida inicial curta!
 let supplies = 70;
 let activeNPC = null;
 let activeItem = null;
-let activeTower = null;
+let activeChamber = null;
 let inDialog = false;
 let animFrame = 0;
+let agingTimer = 0;
 let flashDamage = 0;
 let isGameOver = false;
 let isVictory = false;
@@ -88,6 +89,15 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
     osc.start(now);
     osc.stop(now + 0.25);
+  } else if (tipo === 'capsule') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523, now);
+    osc.frequency.setValueAtTime(659, now + 0.1);
+    osc.frequency.setValueAtTime(784, now + 0.2);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.start(now);
+    osc.stop(now + 0.35);
   } else if (tipo === 'damage') {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(110, now);
@@ -96,6 +106,13 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
     osc.start(now);
     osc.stop(now + 0.25);
+  } else if (tipo === 'tick_year') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, now);
+    gain.gain.setValueAtTime(0.04, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.start(now);
+    osc.stop(now + 0.08);
   } else if (tipo === 'tower_tick') {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(520 + Math.random() * 120, now);
@@ -116,7 +133,7 @@ function tocarEfeitoSonoro(tipo) {
 }
 
 // ==========================================
-// CÂMERA, JOGADOR E OBJETIVOS
+// CÂMERA, JOGADOR (BONECA DE ROSA) E OBJETIVOS
 // ==========================================
 const camera = { x: 0, y: 0 };
 
@@ -126,11 +143,13 @@ const player = {
   width: 26,
   height: 40,
   speed: 3.5,
-  skinColor: '#f1c27d',
-  shirtColor: '#2b4c6f',
-  pantsColor: '#1b222c',
-  hairColor: '#1c1613',
-  hasBackpack: true,
+  isDoll: true,
+  skinColor: '#ffe0d6',
+  dressColor: '#ff69b4',
+  ribbonColor: '#ffb6c1',
+  shoeColor: '#d61c77',
+  hairColor: '#f7d060',
+  hasBackpack: false,
   facing: 1,
   isMoving: false,
   inShelter: false
@@ -138,16 +157,22 @@ const player = {
 
 const keys = {};
 
-const towers = [
-  { id: 1, x: 650, y: 450, width: 36, height: 60, progress: 0, activated: false, name: "Torre Norte" },
-  { id: 2, x: 1900, y: 800, width: 36, height: 60, progress: 0, activated: false, name: "Torre Leste" },
-  { id: 3, x: 1150, y: 1650, width: 36, height: 60, progress: 0, activated: false, name: "Torre Sul" }
-];
+// OBJETIVO PRINCIPAL: CÂMARA DE REGENERAÇÃO GENÉTICA
+const regenerationChamber = {
+  x: 1180,
+  y: 780,
+  width: 54,
+  height: 54,
+  progress: 0,
+  activated: false,
+  name: "Câmara de Regeneração"
+};
 
+// ESCONDERIJOS (CÁPSULAS DE ESTASE QUE PAUSAM O ENVELHECIMENTO)
 const shelters = [
-  { x: 1000, y: 700, width: 140, height: 110, name: "Casa em Ruínas A" },
-  { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker Destruído" },
-  { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
+  { x: 1000, y: 700, width: 140, height: 110, name: "Abrigo de Estase A" },
+  { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker de Estase B" },
+  { x: 400, y: 1500, width: 150, height: 120, name: "Abrigo de Estase C" }
 ];
 
 // CONSTRUÇÕES EXPLORÁVEIS POR DENTRO
@@ -189,13 +214,18 @@ const wreckedCars = [
   { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
+// ITENS NO CHÃO: 3 CÁPSULAS DE SORO GENÉTICO (OBJETIVO) + SUPRIMENTOS QUE GANHAM ANOS DE VIDA
 const itemsOnGround = [
-  { id: 1, x: 1150, y: 880, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
-  { id: 2, x: 840, y: 1130, type: 'med', name: 'Kit Cirúrgico (Interior)', years: 6, supp: 15, collected: false },
-  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Enlatada (Interior)', years: 4, supp: 15, collected: false },
-  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Galão de Água Filtrada', years: 4, supp: 15, collected: false },
-  { id: 5, x: 1360, y: 1525, type: 'med', name: 'Adrenalina Sintética (Interior)', years: 5, supp: 15, collected: false },
-  { id: 6, x: 1710, y: 1085, type: 'water', name: 'Cantil Militar (Interior)', years: 4, supp: 10, collected: false }
+  // 3 CÁPSULAS DE SORO GENÉTICO
+  { id: 101, x: 840, y: 1130, type: 'serum', name: 'Cápsula de Soro Alfa (Posto Médico)', years: 4, supp: 5, collected: false },
+  { id: 102, x: 1710, y: 1085, type: 'serum', name: 'Cápsula de Soro Beta (Laboratório)', years: 4, supp: 5, collected: false },
+  { id: 103, x: 1360, y: 1525, type: 'serum', name: 'Cápsula de Soro Gama (Depósito)', years: 4, supp: 5, collected: false },
+
+  // SUPRIMENTOS PARA GANHAR MAIS TEMPO DE VIDA
+  { id: 1, x: 1150, y: 880, type: 'water', name: 'Água Purificada (+4 Anos)', years: 4, supp: 10, collected: false },
+  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Nutritiva (+5 Anos)', years: 5, supp: 15, collected: false },
+  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Galão Filtrado (+4 Anos)', years: 4, supp: 15, collected: false },
+  { id: 7, x: 940, y: 550, type: 'med', name: 'Estabilizador Celular (+6 Anos)', years: 6, supp: 10, collected: false }
 ];
 
 const npcs = [
@@ -216,10 +246,10 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Encontramos uma poça com água acumulada perto das construções. O grupo tem sede. O que fazemos?",
+    dialog: "O relógio biológico não para... Encontramos água parada perto das construções, mas pode estar contaminada.",
     options: [
-      { text: "Beber a água diretamente para aliviar a desidratação.", years: -8, supp: 5, resp: "A água estava contaminada! Perdeste 8 anos de vida por infecção." },
-      { text: "Ferver e filtrar com o pano antes de beber qualquer gole.", years: 4, supp: 10, resp: "Fizeste uma boa escolha! A água purificada recuperou a tua saúde." }
+      { text: "Beber sem filtrar para economizar tempo.", years: -7, supp: 5, resp: "A contaminação acelerou seu envelhecimento! Perdeste 7 anos de vida." },
+      { text: "Gastar alguns minutos fervendo e filtrando a água.", years: 5, supp: 10, resp: "A água limpa recuperou suas células! Ganhaste +5 anos de vida." }
     ],
     solved: false
   },
@@ -240,21 +270,21 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Deixei suprimentos dentro do Posto Médico aqui ao lado, mas o prédio está pegando fogo. Vale a pena arriscar?",
+    dialog: "Guardei um estabilizador celular dentro do Posto Médico em chamas, junto com a Cápsula de Soro Alfa.",
     options: [
-      { text: "Entrar pela porta e vasculhar as prateleiras internas.", years: 5, supp: 15, resp: "Encontraste medicamentos intactos dentro das salas!" },
-      { text: "Ignorar o prédio para não arriscar a fumaça.", years: -3, supp: 0, resp: "Evitaste o perigo, mas a falta de remédios desgastou tua saúde." }
+      { text: "Entrar no Posto Médico para resgatar os frascos.", years: 6, supp: 15, resp: "Conseguiste o estabilizador celular! Ganhaste +6 anos de vida." },
+      { text: "Desistir e seguir direto sem entrar.", years: -3, supp: 0, resp: "O desgaste sem tratamento custou 3 anos do teu tempo." }
     ],
     solved: false
   }
 ];
 
 const zombies = [
-  { x: 1600, y: 900, width: 26, height: 40, speed: 1.3, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 900, y: 680, width: 26, height: 40, speed: 1.1, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1100, y: 1400, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 500, y: 900, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1850, y: 700, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+  { x: 1600, y: 900, width: 26, height: 40, speed: 0.7, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
+  { x: 900, y: 680, width: 26, height: 40, speed: 0.6, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1100, y: 1400, width: 26, height: 40, speed: 0.65, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 500, y: 900, width: 26, height: 40, speed: 0.55, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1850, y: 700, width: 26, height: 40, speed: 0.65, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
 ];
 
 function redimensionarCanvas() {
@@ -297,24 +327,37 @@ function iniciarJogo() {
 }
 
 function reiniciarJogo() {
-  lifeYears = 40;
+  lifeYears = 35;
   supplies = 70;
   player.x = 1200;
   player.y = 900;
+  agingTimer = 0;
   isGameOver = false;
   isVictory = false;
+  regenerationChamber.activated = false;
+  regenerationChamber.progress = 0;
 
-  document.getElementById('life-span').innerText = lifeYears + ' Anos';
+  atualizarHUDVida();
   document.getElementById('supplies-val').innerText = supplies + '%';
-  document.getElementById('towers-val').innerText = '0/3';
+  document.getElementById('capsules-val').innerText = '0/3';
   document.getElementById('game-over-screen').style.display = 'none';
   document.getElementById('victory-screen').style.display = 'none';
 
   itemsOnGround.forEach(i => i.collected = false);
   npcs.forEach(n => n.solved = false);
-  towers.forEach(t => { t.activated = false; t.progress = 0; });
 
   requestAnimationFrame(gameLoop);
+}
+
+function atualizarHUDVida() {
+  const el = document.getElementById('life-span');
+  el.innerText = lifeYears + ' Anos';
+  // Pisca em vermelho crítico quando resta 10 anos ou menos
+  if (lifeYears <= 10) {
+    el.style.color = '#ff0033';
+  } else {
+    el.style.color = '#ffffff';
+  }
 }
 
 function gameLoop() {
@@ -325,10 +368,11 @@ function gameLoop() {
   if (!inDialog) {
     atualizarJogador();
     atualizarEsconderijo();
+    atualizarRelogioBiologico();
     atualizarNPCs();
     atualizarZumbis();
     verificarInteracoes();
-    atualizarAtivacaoTorre();
+    atualizarSinteseCamara();
     verificarAtaqueZumbi();
     verificarMorte();
   }
@@ -343,10 +387,24 @@ function gameLoop() {
   }
 }
 
+// O TEMPO DE VIDA CORRE CONTINUAMENTE FORA DOS ABRIGOS DE ESTASE
+function atualizarRelogioBiologico() {
+  if (player.inShelter) return; // Nos abrigos de estase o tempo fica pausado
+
+  agingTimer++;
+  // A cada ~4.5 segundos (270 frames), perde 1 ano de vida
+  if (agingTimer >= 270) {
+    agingTimer = 0;
+    lifeYears = Math.max(0, lifeYears - 1);
+    atualizarHUDVida();
+    tocarEfeitoSonoro('tick_year');
+  }
+}
+
 function atualizarSomTensao() {
   if (!audioEnabled || !audioCtx) return;
 
-  if (isBeingChased && !player.inShelter) {
+  if ((isBeingChased && !player.inShelter) || lifeYears <= 10) {
     heartbeatTimer++;
     if (heartbeatTimer >= 38) {
       heartbeatTimer = 0;
@@ -398,7 +456,6 @@ function jogadorDentroDe(b) {
   return cx > b.x && cx < b.x + b.w && cy > b.y && cy < b.y + b.h;
 }
 
-// COLISÃO DO JOGADOR (PODE ENTRAR NOS ESCONDERIJOS E PELAS PORTAS DAS CONSTRUÇÕES)
 function checarColisaoObstaculos(nextX, nextY) {
   const footX = nextX + 4;
   const footY = nextY + 18;
@@ -432,9 +489,7 @@ function checarColisaoObstaculos(nextX, nextY) {
   return false;
 }
 
-// BARREIRA EXCLUSIVA PARA ZUMBIS (PROÍBE ENTRAR NOS ESCONDERIJOS E ATRAVESSAR OBSTÁCULOS)
 function checarColisaoZumbi(nextX, nextY, z) {
-  // 1. Bloqueia entrada nos esconderijos (com margem de segurança de 6px)
   for (let s of shelters) {
     if (
       nextX < s.x + s.width + 6 &&
@@ -446,22 +501,17 @@ function checarColisaoZumbi(nextX, nextY, z) {
     }
   }
 
-  // 2. Bloqueia atravessar paredes das construções
   for (let b of buildings) {
-    const walls = obterParedesConstrucao(b);
-    for (let w of walls) {
-      if (
-        nextX < w.x + w.w &&
-        nextX + z.width > w.x &&
-        nextY < w.y + w.h &&
-        nextY + z.height > w.y
-      ) {
-        return true;
-      }
+    if (
+      nextX < b.x + b.w + 4 &&
+      nextX + z.width > b.x - 4 &&
+      nextY < b.y + b.h + 4 &&
+      nextY + z.height > b.y - 4
+    ) {
+      return true;
     }
   }
 
-  // 3. Bloqueia atravessar carros destruídos
   for (let c of wreckedCars) {
     if (
       nextX < c.x + c.w &&
@@ -532,12 +582,20 @@ function atualizarNPCs() {
 function atualizarZumbis() {
   isBeingChased = false;
 
+  let playerInsideBuilding = false;
+  for (let b of buildings) {
+    if (jogadorDentroDe(b)) {
+      playerInsideBuilding = true;
+      break;
+    }
+  }
+
   for (let z of zombies) {
     const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
     const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
     const dist = Math.hypot(dx, dy);
 
-    if (!player.inShelter && dist < 400) {
+    if (!player.inShelter && !playerInsideBuilding && dist < 380) {
       z.vx = (dx / dist) * z.speed;
       z.vy = (dy / dist) * z.speed;
       z.isMoving = true;
@@ -545,12 +603,12 @@ function atualizarZumbis() {
       isBeingChased = true;
     } else {
       z.patrolTimer++;
-      if (z.patrolTimer > 100 + Math.random() * 50) {
+      if (z.patrolTimer > 110 + Math.random() * 60) {
         z.patrolTimer = 0;
         const ang = Math.random() * Math.PI * 2;
         if (Math.random() > 0.3) {
-          z.vx = Math.cos(ang) * (z.speed * 0.5);
-          z.vy = Math.sin(ang) * (z.speed * 0.5);
+          z.vx = Math.cos(ang) * (z.speed * 0.55);
+          z.vy = Math.sin(ang) * (z.speed * 0.55);
           z.isMoving = true;
           z.facing = z.vx >= 0 ? 1 : -1;
         } else {
@@ -561,47 +619,65 @@ function atualizarZumbis() {
       }
     }
 
-    // Move o zumbi respeitando a barreira dos esconderijos e obstáculos
-    let blocked = false;
+    let blockedX = false;
+    let blockedY = false;
+
     if (!checarColisaoZumbi(z.x + z.vx, z.y, z)) {
       z.x += z.vx;
     } else {
-      blocked = true;
+      blockedX = true;
     }
 
     if (!checarColisaoZumbi(z.x, z.y + z.vy, z)) {
       z.y += z.vy;
     } else {
-      blocked = true;
+      blockedY = true;
     }
 
-    // Se encostar na borda de um esconderijo ou obstáculo, vira para longe
-    if (blocked) {
+    if (blockedX && blockedY) {
       z.vx = -z.vx;
       z.vy = -z.vy;
       z.facing = z.vx >= 0 ? 1 : -1;
       z.patrolTimer = 0;
+    } else if (blockedX) {
+      z.vx = -z.vx * 0.5;
+      z.facing = z.vx >= 0 ? 1 : -1;
+    } else if (blockedY) {
+      z.vy = -z.vy * 0.5;
     }
   }
+}
+
+function contarCapsulasColetadas() {
+  return itemsOnGround.filter(i => i.type === 'serum' && i.collected).length;
 }
 
 function verificarInteracoes() {
   activeNPC = null;
   activeItem = null;
-  activeTower = null;
+  activeChamber = null;
   const prompt = document.getElementById('interaction-prompt');
 
-  for (let t of towers) {
-    if (t.activated) continue;
-    const dist = Math.hypot((player.x + player.width/2) - (t.x + t.width/2), (player.y + player.height/2) - (t.y + t.height/2));
-    if (dist < 55) {
-      activeTower = t;
-      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para religar ${t.name}`;
+  // 1. Interação com a Câmara de Regeneração
+  const distChamber = Math.hypot(
+    (player.x + player.width / 2) - (regenerationChamber.x + regenerationChamber.width / 2),
+    (player.y + player.height / 2) - (regenerationChamber.y + regenerationChamber.height / 2)
+  );
+  if (distChamber < 65 && !regenerationChamber.activated) {
+    const caps = contarCapsulasColetadas();
+    if (caps >= 3) {
+      activeChamber = regenerationChamber;
+      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para sintetizar o Soro na Câmara`;
+      prompt.style.display = 'block';
+      return;
+    } else {
+      prompt.innerHTML = `Câmara Bloqueada: Colete as 3 Cápsulas de Soro (${caps}/3)`;
       prompt.style.display = 'block';
       return;
     }
   }
 
+  // 2. Interação com Sobreviventes (NPCs)
   for (let npc of npcs) {
     const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
     if (dist < 50 && !npc.solved) {
@@ -612,6 +688,7 @@ function verificarInteracoes() {
     }
   }
 
+  // 3. Interação com Itens e Cápsulas de Soro
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
@@ -626,39 +703,31 @@ function verificarInteracoes() {
   prompt.style.display = 'none';
 }
 
-function atualizarAtivacaoTorre() {
+function atualizarSinteseCamara() {
   const progBox = document.getElementById('tower-progress-box');
   const progFill = document.getElementById('tower-progress-fill');
 
-  if (activeTower && (keys['e'] || keys[' '])) {
+  if (activeChamber && (keys['e'] || keys[' '])) {
     progBox.style.display = 'block';
-    activeTower.progress += 0.7;
-    progFill.style.width = Math.min(100, activeTower.progress) + '%';
+    activeChamber.progress += 0.7;
+    progFill.style.width = Math.min(100, activeChamber.progress) + '%';
 
     if (animFrame % 12 === 0) {
       tocarEfeitoSonoro('tower_tick');
     }
 
-    if (activeTower.progress >= 100) {
-      activeTower.activated = true;
+    if (activeChamber.progress >= 100) {
+      activeChamber.activated = true;
       progBox.style.display = 'none';
-      tocarEfeitoSonoro('item');
-
-      const ligadas = towers.filter(t => t.activated).length;
-      document.getElementById('towers-val').innerText = `${ligadas}/3`;
-      mostrarPopupItem(`${activeTower.name} ONLINE! (${ligadas}/3)`);
-
-      if (ligadas === 3) {
-        isVictory = true;
-        tocarEfeitoSonoro('victory');
-        document.getElementById('victory-stats').innerText = `Expectativa de Vida Preservada: ${lifeYears} Anos`;
-        document.getElementById('victory-screen').style.display = 'flex';
-      }
+      isVictory = true;
+      tocarEfeitoSonoro('victory');
+      document.getElementById('victory-stats').innerText = `Tempo Restante Antes da Cura: ${lifeYears} Anos → 85 Anos!`;
+      document.getElementById('victory-screen').style.display = 'flex';
     }
   } else {
     progBox.style.display = 'none';
-    if (activeTower && !activeTower.activated) {
-      activeTower.progress = Math.max(0, activeTower.progress - 0.5);
+    if (activeChamber && !activeChamber.activated) {
+      activeChamber.progress = Math.max(0, activeChamber.progress - 0.5);
     }
   }
 }
@@ -668,11 +737,23 @@ function coletarItem(item) {
   lifeYears = Math.min(100, lifeYears + item.years);
   supplies = Math.min(100, supplies + item.supp);
 
-  document.getElementById('life-span').innerText = lifeYears + ' Anos';
+  atualizarHUDVida();
   document.getElementById('supplies-val').innerText = supplies + '%';
 
-  tocarEfeitoSonoro('item');
-  mostrarPopupItem(`+${item.years} Anos: ${item.name}!`);
+  if (item.type === 'serum') {
+    const caps = contarCapsulasColetadas();
+    document.getElementById('capsules-val').innerText = `${caps}/3`;
+    tocarEfeitoSonoro('capsule');
+    if (caps === 3) {
+      mostrarPopupItem(`3/3 CÁPSULAS COLETADAS! Vá até a Câmara de Regeneração!`);
+    } else {
+      mostrarPopupItem(`Cápsula de Soro (${caps}/3) +${item.years} Anos de Vida!`);
+    }
+  } else {
+    tocarEfeitoSonoro('item');
+    mostrarPopupItem(`+${item.years} Anos de Vida: ${item.name}!`);
+  }
+
   activeItem = null;
 }
 
@@ -680,7 +761,7 @@ function mostrarPopupItem(texto) {
   const pop = document.getElementById('item-popup');
   pop.innerText = texto;
   pop.style.display = 'block';
-  setTimeout(() => { pop.style.display = 'none'; }, 2500);
+  setTimeout(() => { pop.style.display = 'none'; }, 2800);
 }
 
 function verificarAtaqueZumbi() {
@@ -691,7 +772,7 @@ function verificarAtaqueZumbi() {
     if (dist < 22) {
       lifeYears = Math.max(0, lifeYears - 2);
       flashDamage = 6;
-      document.getElementById('life-span').innerText = lifeYears + ' Anos';
+      atualizarHUDVida();
       if (animFrame % 15 === 0) tocarEfeitoSonoro('damage');
     }
   }
@@ -729,7 +810,7 @@ function responderNPC(npc, opcao) {
   lifeYears = Math.max(0, lifeYears + opcao.years);
   supplies = Math.max(0, Math.min(100, supplies + opcao.supp));
 
-  document.getElementById('life-span').innerText = lifeYears + ' Anos';
+  atualizarHUDVida();
   document.getElementById('supplies-val').innerText = supplies + '%';
 
   if (opcao.years > 0) tocarEfeitoSonoro('item');
@@ -974,7 +1055,7 @@ function desenharCarroDestruido(c) {
 }
 
 function desenharCenario() {
-  // Esconderijos (zona fechada para zumbis, aberta para o jogador)
+  // Abrigos de Estase (pausam o envelhecimento)
   for (let s of shelters) {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
@@ -982,25 +1063,16 @@ function desenharCenario() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fillRect(sx + 6, sy + 6, s.width, s.height);
 
-    ctx.fillStyle = '#241b15';
+    ctx.fillStyle = '#132421';
     ctx.fillRect(sx, sy, s.width, s.height);
-
-    ctx.strokeStyle = '#3d2e24';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(sx + 10, sy + 30);
-    ctx.lineTo(sx + s.width - 10, sy + 30);
-    ctx.moveTo(sx + 10, sy + s.height - 20);
-    ctx.lineTo(sx + s.width - 10, sy + s.height - 20);
-    ctx.stroke();
 
     ctx.strokeStyle = '#00ff88';
     ctx.lineWidth = 2;
     ctx.strokeRect(sx, sy, s.width, s.height);
 
     ctx.fillStyle = '#00ff88';
-    ctx.font = '9px "Press Start 2P"';
-    ctx.fillText('ABRIGO SEGURO', sx + 8, sy + 18);
+    ctx.font = '8px "Press Start 2P"';
+    ctx.fillText('ABRIGO DE ESTASE', sx + 8, sy + 18);
   }
 
   for (let b of buildings) {
@@ -1011,37 +1083,33 @@ function desenharCenario() {
     desenharCarroDestruido(c);
   }
 
-  for (let t of towers) {
-    const tx = t.x - camera.x;
-    const ty = t.y - camera.y;
+  // CÂMARA DE REGENERAÇÃO GENÉTICA (OBJETIVO FINAL)
+  const cx = regenerationChamber.x - camera.x;
+  const cy = regenerationChamber.y - camera.y;
+  const caps = contarCapsulasColetadas();
 
-    ctx.fillStyle = '#2a2e35';
-    ctx.fillRect(tx, ty + 20, t.width, 40);
-    ctx.strokeStyle = t.activated ? '#00ff88' : '#ffcc00';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(tx, ty + 20, t.width, 40);
+  // Aura pulsante ao redor da câmara
+  const pulseR = 32 + Math.sin(animFrame * 0.1) * 5;
+  ctx.fillStyle = caps >= 3 ? 'rgba(0, 255, 136, 0.22)' : 'rgba(255, 204, 0, 0.16)';
+  ctx.beginPath();
+  ctx.arc(cx + regenerationChamber.width / 2, cy + regenerationChamber.height / 2, pulseR, 0, Math.PI * 2);
+  ctx.fill();
 
-    ctx.strokeStyle = '#8899aa';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(tx + t.width / 2, ty + 20);
-    ctx.lineTo(tx + t.width / 2, ty - 15);
-    ctx.stroke();
+  ctx.fillStyle = '#19232c';
+  ctx.fillRect(cx, cy, regenerationChamber.width, regenerationChamber.height);
+  ctx.strokeStyle = caps >= 3 ? '#00ff88' : '#ffcc00';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(cx, cy, regenerationChamber.width, regenerationChamber.height);
 
-    const blink = Math.floor(animFrame / 20) % 2 === 0;
-    ctx.fillStyle = t.activated ? '#00ff88' : (blink ? '#ff0033' : '#660011');
-    ctx.beginPath();
-    ctx.arc(tx + t.width / 2, ty - 17, 5, 0, Math.PI * 2);
-    ctx.fill();
+  // Núcleo de vidro da câmara
+  ctx.fillStyle = caps >= 3 ? '#00e5ff' : '#3a4b5c';
+  ctx.beginPath();
+  ctx.arc(cx + regenerationChamber.width / 2, cy + regenerationChamber.height / 2, 14, 0, Math.PI * 2);
+  ctx.fill();
 
-    if (t.activated) {
-      ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(tx + t.width / 2, ty - 17, 14 + (animFrame % 20), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
+  ctx.fillStyle = caps >= 3 ? '#00ff88' : '#ffcc00';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.fillText(`CÂMARA DE CURA (${caps}/3)`, cx - 42, cy - 8);
 }
 
 function desenharItemChao(item) {
@@ -1049,18 +1117,163 @@ function desenharItemChao(item) {
   const screenX = item.x - camera.x;
   const screenY = item.y - camera.y;
 
-  ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.5)' : 'rgba(255, 200, 0, 0.5)';
+  if (item.type === 'serum') {
+    // Cápsula de Soro Genético (brilho ciano pulsante)
+    const glow = 13 + Math.sin(animFrame * 0.15) * 3;
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, glow, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#00e5ff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(screenX - 4, screenY - 8, 8, 16, 4);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.5)' : 'rgba(255, 200, 0, 0.5)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (item.type === 'water') {
+      ctx.fillStyle = '#00ccff';
+      ctx.fillRect(screenX - 3, screenY - 6, 6, 12);
+    } else {
+      ctx.fillStyle = '#ff9900';
+      ctx.fillRect(screenX - 5, screenY - 5, 10, 10);
+    }
+  }
+}
+
+// ==========================================
+// PERSONAGENS: BONECA DE ROSA, NPCs E ZUMBIS
+// ==========================================
+function desenharBonecaRosa(screenX, screenY, char, isMoving) {
+  const facing = char.facing || 1;
+  const cycle = animFrame * 0.25;
+  const legSwing = isMoving ? Math.sin(cycle) * 4 : 0;
+  const armSwing = isMoving ? Math.cos(cycle) * 4 : 0;
+  const bodyBob = isMoving ? Math.abs(Math.sin(cycle)) * 1.8 : 0;
+  const cx = screenX + 13;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   ctx.beginPath();
-  ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
+  ctx.ellipse(cx, screenY + 38, 12, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  if (item.type === 'water') {
-    ctx.fillStyle = '#00ccff';
-    ctx.fillRect(screenX - 3, screenY - 6, 6, 12);
-  } else {
-    ctx.fillStyle = '#ff9900';
-    ctx.fillRect(screenX - 5, screenY - 5, 10, 10);
-  }
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = '#2d111e';
+
+  ctx.fillStyle = '#fff5f8';
+  ctx.beginPath();
+  ctx.roundRect(cx - 6, screenY + 26 - bodyBob, 5, 9 + legSwing, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = char.shoeColor || '#d61c77';
+  ctx.beginPath();
+  ctx.roundRect(cx - 6.5, screenY + 34 + legSwing - bodyBob, 6, 4.5, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#fff5f8';
+  ctx.beginPath();
+  ctx.roundRect(cx + 1, screenY + 26 - bodyBob, 5, 9 - legSwing, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = char.shoeColor || '#d61c77';
+  ctx.beginPath();
+  ctx.roundRect(cx + 0.5, screenY + 34 - legSwing - bodyBob, 6, 4.5, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = char.skinColor;
+  ctx.beginPath();
+  ctx.roundRect(cx - 9.5, screenY + 15 - armSwing - bodyBob, 3.8, 9, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  const dressTop = screenY + 12 - bodyBob;
+  ctx.fillStyle = char.dressColor || '#ff69b4';
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, dressTop);
+  ctx.lineTo(cx + 6, dressTop);
+  ctx.lineTo(cx + 11, dressTop + 16);
+  ctx.lineTo(cx - 11, dressTop + 16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = char.ribbonColor || '#ffb6c1';
+  ctx.fillRect(cx - 10, dressTop + 13.5, 20, 2.5);
+
+  ctx.fillRect(cx - 6.5, dressTop + 6, 13, 2.5);
+  ctx.beginPath();
+  ctx.arc(cx + facing * 1.5, dressTop + 7.2, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = char.ribbonColor || '#ffb6c1';
+  ctx.beginPath();
+  ctx.arc(cx + 7.5, dressTop + 3 + armSwing * 0.5, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = char.skinColor;
+  ctx.beginPath();
+  ctx.roundRect(cx + 6, dressTop + 4 + armSwing, 3.8, 8, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  const headX = cx;
+  const headY = screenY + 5 - bodyBob;
+
+  ctx.fillStyle = char.hairColor || '#f7d060';
+  ctx.beginPath();
+  ctx.ellipse(headX - 9.5, headY + 2, 3.8, 6.5, 0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(headX + 9.5, headY + 2, 3.8, 6.5, -0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#ff1493';
+  ctx.beginPath();
+  ctx.arc(headX - 7.5, headY - 2.5, 2.3, 0, Math.PI * 2);
+  ctx.arc(headX + 7.5, headY - 2.5, 2.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = char.skinColor;
+  ctx.beginPath();
+  ctx.arc(headX, headY, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = char.hairColor || '#f7d060';
+  ctx.beginPath();
+  ctx.arc(headX, headY - 1.5, 8.2, Math.PI, 0);
+  ctx.fill();
+  ctx.stroke();
+
+  const eyeShift = facing * 1.8;
+  ctx.fillStyle = 'rgba(255, 105, 180, 0.55)';
+  ctx.beginPath();
+  ctx.arc(headX - 3.5 + eyeShift, headY + 2.2, 1.8, 0, Math.PI * 2);
+  ctx.arc(headX + 3.5 + eyeShift, headY + 2.2, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#1b1124';
+  ctx.beginPath();
+  ctx.arc(headX - 2.4 + eyeShift, headY + 0.2, 1.7, 0, Math.PI * 2);
+  ctx.arc(headX + 2.4 + eyeShift, headY + 0.2, 1.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(headX - 2.9 + eyeShift, headY - 0.6, 1, 1);
+  ctx.fillRect(headX + 1.9 + eyeShift, headY - 0.6, 1, 1);
 }
 
 function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = false, isNPC = false) {
@@ -1069,11 +1282,17 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 
   if (screenX < -60 || screenX > canvas.width + 60 || screenY < -60 || screenY > canvas.height + 60) return;
 
+  if (char.isDoll) {
+    desenharBonecaRosa(screenX, screenY, char, isMoving);
+    return;
+  }
+
   const facing = char.facing || 1;
-  const cycle = animFrame * 0.24;
+  const cycle = isZombie ? animFrame * 0.14 : animFrame * 0.24;
   const legSwing = isMoving ? Math.sin(cycle) * 4.5 : 0;
   const armSwing = isMoving ? Math.cos(cycle) * 4 : 0;
-  const bodyBob = isMoving ? Math.abs(Math.sin(cycle)) * 1.5 : 0;
+  const limpTilt = (isZombie && isMoving) ? Math.max(0, Math.sin(cycle)) * 2.5 : 0;
+  const bodyBob = isMoving ? (isZombie ? limpTilt : Math.abs(Math.sin(cycle)) * 1.5) : 0;
 
   const cx = screenX + 13;
 
@@ -1097,66 +1316,95 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   ctx.lineWidth = 1.2;
   ctx.strokeStyle = '#0d0d0d';
 
-  ctx.fillStyle = pantsColor;
-  ctx.beginPath();
-  ctx.roundRect(cx - 7, screenY + 24 - bodyBob, 6, 11 + legSwing, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#141110';
-  ctx.fillRect(cx - 7.5, screenY + 33 + legSwing - bodyBob, 7, 4);
+  if (isZombie) {
+    const stepFront = isMoving ? Math.max(0, Math.sin(cycle)) * 4 : 0;
+    const dragLag = isMoving ? (6 + Math.sin(cycle) * 2) * facing : 4 * facing;
 
-  ctx.fillStyle = pantsColor;
-  ctx.beginPath();
-  ctx.roundRect(cx + 1, screenY + 24 - bodyBob, 6, 11 - legSwing, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#141110';
-  ctx.fillRect(cx + 0.5, screenY + 33 - legSwing - bodyBob, 7, 4);
+    ctx.strokeStyle = '#0d0d0d';
+    ctx.fillStyle = '#1d241a';
+    ctx.beginPath();
+    ctx.moveTo(cx - 2 * facing, screenY + 25 + bodyBob);
+    ctx.lineTo(cx - 7 * facing, screenY + 25 + bodyBob);
+    ctx.lineTo(cx - 7 * facing - dragLag, screenY + 37);
+    ctx.lineTo(cx - 1 * facing - dragLag, screenY + 37);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#141110';
+    ctx.fillRect(cx - 5 * facing - dragLag - 3, screenY + 35, 8, 3.5);
+
+    ctx.fillStyle = pantsColor;
+    ctx.beginPath();
+    ctx.roundRect(cx + (facing === 1 ? 0 : -6), screenY + 24 + bodyBob, 6, 11 - stepFront * 0.5, 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#141110';
+    ctx.fillRect(cx + (facing === 1 ? -0.5 : -6.5), screenY + 34 - stepFront * 0.5 + bodyBob * 0.3, 7, 4);
+  } else {
+    ctx.fillStyle = pantsColor;
+    ctx.beginPath();
+    ctx.roundRect(cx - 7, screenY + 24 - bodyBob, 6, 11 + legSwing, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#141110';
+    ctx.fillRect(cx - 7.5, screenY + 33 + legSwing - bodyBob, 7, 4);
+
+    ctx.fillStyle = pantsColor;
+    ctx.beginPath();
+    ctx.roundRect(cx + 1, screenY + 24 - bodyBob, 6, 11 - legSwing, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#141110';
+    ctx.fillRect(cx + 0.5, screenY + 33 - legSwing - bodyBob, 7, 4);
+  }
 
   ctx.fillStyle = isZombie ? '#4b6344' : char.skinColor;
   ctx.beginPath();
-  ctx.roundRect(cx - 10, screenY + 14 - armSwing - bodyBob, 4, 11, 2);
+  ctx.roundRect(cx - 10, screenY + 14 - armSwing + (isZombie ? bodyBob : -bodyBob), 4, 11, 2);
   ctx.fill();
 
-  const torsoOffset = isZombie ? facing * 1.5 : 0;
+  const torsoY = isZombie ? screenY + 11 + bodyBob : screenY + 11 - bodyBob;
+  const torsoOffset = isZombie ? facing * 2 : 0;
   ctx.fillStyle = isZombie ? '#33422e' : char.shirtColor;
   ctx.beginPath();
-  ctx.roundRect(cx - 8 + torsoOffset, screenY + 11 - bodyBob, 16, 15, 3);
+  ctx.roundRect(cx - 8 + torsoOffset, torsoY, 16, 15, 3);
   ctx.fill();
   ctx.stroke();
 
   if (!isZombie) {
     ctx.fillStyle = char.isMedic ? '#ff2a4b' : 'rgba(0,0,0,0.28)';
-    ctx.fillRect(cx - 1, screenY + 12 - bodyBob, 2, 13);
+    ctx.fillRect(cx - 1, torsoY + 1, 2, 13);
     if (char.isMedic) {
-      ctx.fillRect(cx - 3.5, screenY + 15 - bodyBob, 7, 2);
+      ctx.fillRect(cx - 3.5, torsoY + 4, 7, 2);
     }
   } else {
     ctx.fillStyle = '#587350';
-    ctx.fillRect(cx - 4 + torsoOffset, screenY + 17 - bodyBob, 5, 3);
+    ctx.fillRect(cx - 4 + torsoOffset, torsoY + 6, 5, 3);
   }
 
   if (isZombie) {
     ctx.fillStyle = '#587350';
     ctx.beginPath();
     const reachX = facing === 1 ? cx + 3 : cx - 14;
-    ctx.roundRect(reachX, screenY + 13 + (armSwing * 0.4) - bodyBob, 11, 4, 2);
+    ctx.roundRect(reachX, torsoY + 2 + (armSwing * 0.4), 11, 4, 2);
     ctx.fill();
     ctx.stroke();
   } else {
     ctx.fillStyle = char.shirtColor;
     ctx.beginPath();
-    ctx.roundRect(cx + 6, screenY + 13 + armSwing - bodyBob, 4.5, 9, 2);
+    ctx.roundRect(cx + 6, torsoY + 2 + armSwing, 4.5, 9, 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = char.skinColor;
     ctx.beginPath();
-    ctx.arc(cx + 8.2, screenY + 23 + armSwing - bodyBob, 2.2, 0, Math.PI * 2);
+    ctx.arc(cx + 8.2, torsoY + 12 + armSwing, 2.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const headX = cx + (isZombie ? facing * 2 : 0);
-  const headY = screenY + 5 - bodyBob;
+  const headX = cx + (isZombie ? facing * 2.5 : 0);
+  const headY = isZombie ? screenY + 5 + bodyBob : screenY + 5 - bodyBob;
 
   ctx.fillStyle = isZombie ? '#5d7a54' : char.skinColor;
   ctx.beginPath();
@@ -1191,7 +1439,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 }
 
 // ==========================================
-// MINIMAPA RADAR TÁTICO
+// MINIMAPA RADAR BIOLÓGICO
 // ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
@@ -1254,12 +1502,27 @@ function desenharMinimapa() {
     miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
   }
 
-  miniCtx.fillStyle = '#38bdf8';
+  // Itens e Cápsulas de Soro no minimapa
   for (let item of itemsOnGround) {
     if (item.collected) continue;
-    const mx = cx + (item.x - player.x) * scale;
-    const my = cy + (item.y - player.y) * scale;
-    miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+    let mx = cx + (item.x - player.x) * scale;
+    let my = cy + (item.y - player.y) * scale;
+
+    if (item.type === 'serum') {
+      mx = Math.max(8, Math.min(mw - 8, mx));
+      my = Math.max(8, Math.min(mh - 8, my));
+      miniCtx.fillStyle = '#00e5ff';
+      miniCtx.beginPath();
+      miniCtx.moveTo(mx, my - 4);
+      miniCtx.lineTo(mx + 3.5, my);
+      miniCtx.lineTo(mx, my + 4);
+      miniCtx.lineTo(mx - 3.5, my);
+      miniCtx.closePath();
+      miniCtx.fill();
+    } else {
+      miniCtx.fillStyle = '#38bdf8';
+      miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+    }
   }
 
   miniCtx.fillStyle = '#ff8800';
@@ -1272,20 +1535,13 @@ function desenharMinimapa() {
     miniCtx.fill();
   }
 
-  for (let t of towers) {
-    let mx = cx + (t.x - player.x) * scale;
-    let my = cy + (t.y - player.y) * scale;
-    mx = Math.max(8, Math.min(mw - 8, mx));
-    my = Math.max(8, Math.min(mh - 8, my));
-
-    miniCtx.fillStyle = t.activated ? '#00e5ff' : '#ffcc00';
-    miniCtx.beginPath();
-    miniCtx.moveTo(mx, my - 4.5);
-    miniCtx.lineTo(mx + 4, my + 3.5);
-    miniCtx.lineTo(mx - 4, my + 3.5);
-    miniCtx.closePath();
-    miniCtx.fill();
-  }
+  // Câmara de Regeneração no minimapa (Estrela Dourada)
+  let chX = cx + (regenerationChamber.x - player.x) * scale;
+  let chY = cy + (regenerationChamber.y - player.y) * scale;
+  chX = Math.max(8, Math.min(mw - 8, chX));
+  chY = Math.max(8, Math.min(mh - 8, chY));
+  miniCtx.fillStyle = contarCapsulasColetadas() >= 3 ? '#00ff88' : '#ffcc00';
+  miniCtx.fillRect(chX - 3.5, chY - 3.5, 7, 7);
 
   const pulse = 2.5 + Math.sin(animFrame * 0.15) * 0.6;
   for (let z of zombies) {
@@ -1299,7 +1555,7 @@ function desenharMinimapa() {
     }
   }
 
-  miniCtx.fillStyle = 'rgba(0, 204, 255, 0.18)';
+  miniCtx.fillStyle = 'rgba(255, 105, 180, 0.25)';
   miniCtx.beginPath();
   miniCtx.moveTo(cx, cy);
   if (player.facing === 1) {
@@ -1310,7 +1566,7 @@ function desenharMinimapa() {
   miniCtx.closePath();
   miniCtx.fill();
 
-  miniCtx.fillStyle = '#00ccff';
+  miniCtx.fillStyle = '#ff69b4';
   miniCtx.beginPath();
   miniCtx.arc(cx, cy, 3.8, 0, Math.PI * 2);
   miniCtx.fill();
@@ -1330,8 +1586,8 @@ function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  const ligadas = towers.filter(t => t.activated).length;
-  const outerRadius = 360 + ligadas * 60;
+  // A visão escurece levemente se o tempo de vida estiver muito baixo
+  const outerRadius = lifeYears <= 10 ? 290 : 380;
 
   const gradient = ctx.createRadialGradient(screenPx, screenPy, 80, screenPx, screenPy, outerRadius);
   gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');

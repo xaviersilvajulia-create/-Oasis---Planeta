@@ -1,93 +1,119 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OASIS // Sobrevivência Pós-Apocalíptica</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOBREVIVÊNCIA: TEMPO ESGOTANDO</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- TELA DE LOGIN -->
-  <div id="login-screen" class="vr-overlay">
-    <div class="login-card">
-      <h1 class="glitch">OASIS // SOBREVIVÊNCIA</h1>
-      <p class="subtitle">ZONA EM RUÍNAS - ANO 2088</p>
+
+  <!-- TELA INICIAL -->
+  <div id="login-screen" class="overlay-screen">
+    <div class="login-box">
+      <h1 class="game-title">TEMPO ESGOTANDO</h1>
+      <p class="subtitle">A radiação reduziu a expectativa de vida humana para 35 anos. Recupere as 3 Cápsulas de Soro e ative a Câmara de Regeneração antes que seu tempo acabe.</p>
+      
       <div class="input-group">
         <label for="player-name-input">NOME DO SOBREVIVENTE:</label>
-        <input type="text" id="player-name-input" placeholder="Ex: Parzival" maxlength="15">
-        <button class="btn-oasis" onclick="iniciarJogo()">ENTRAR NA ZONA</button>
+        <input type="text" id="player-name-input" placeholder="Digite seu codinome..." maxlength="15" />
+      </div>
+
+      <button class="btn-start" onclick="iniciarJogo()">LUTAR PELO TEMPO</button>
+      
+      <div class="controls-hint">
+        <span>[W A S D] Mover</span>
+        <span>[E] Coletar / Conversar / Sintetizar</span>
       </div>
     </div>
   </div>
 
   <!-- TELA DE GAME OVER -->
-  <div id="game-over-screen" class="vr-overlay" style="display: none;">
-    <div class="login-card danger-card">
-      <h1 class="glitch-danger">EXPECTATIVA DE VIDA ZERADA</h1>
-      <p class="subtitle">O seu tempo no território pós-apocalíptico acabou.</p>
-      <button class="btn-oasis" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
+  <div id="game-over-screen" class="overlay-screen" style="display: none;">
+    <div class="login-box" style="border-color: #ff0033; box-shadow: 0 0 40px rgba(255, 0, 51, 0.4);">
+      <h1 class="game-title" style="color: #ff0033;">SEU TEMPO ACABOU</h1>
+      <p class="subtitle">Seu relógio biológico chegou a zero antes de sintetizar a cura.</p>
+      <button class="btn-start" style="background: #ff0033;" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
     </div>
   </div>
 
-  <!-- TELA DE VITÓRIA (OBJETIVO CONCLUÍDO) -->
-  <div id="victory-screen" class="vr-overlay" style="display: none;">
-    <div class="login-card victory-card">
-      <h1 class="glitch-victory">SINAL RESTABELECIDO!</h1>
-      <p class="subtitle">As 3 Torres de Transmissão estão online. O resgate está a caminho.</p>
-      <p id="victory-stats" class="victory-details">Expectativa de Vida Restante: -- Anos</p>
-      <button class="btn-oasis" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
+  <!-- TELA DE VITÓRIA -->
+  <div id="victory-screen" class="overlay-screen" style="display: none;">
+    <div class="login-box" style="border-color: #00ff88; box-shadow: 0 0 40px rgba(0, 255, 136, 0.4);">
+      <h1 class="game-title" style="color: #00ff88;">LONGEVIDADE RESTAURADA!</h1>
+      <p class="subtitle">Você sintetizou o Soro Genético a tempo! A expectativa de vida foi restaurada para 85 anos.</p>
+      <p id="victory-stats" style="color: #ffcc00; font-family: 'Press Start 2P', monospace; font-size: 11px; margin-bottom: 20px;"></p>
+      <button class="btn-start" style="background: #00ff88; color: #05110a;" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
     </div>
   </div>
 
-  <!-- INTERFACE DO JOGO (HUD EXPANDIDA) -->
+  <!-- INTERFACE DO JOGO -->
   <div id="game-ui" style="display: none;">
-    <header class="hud-top">
-      <div class="stat-badge">SOBREVIVENTE: <span id="display-player-name">---</span></div>
-      <div class="stat-badge danger">VIDA: <span id="life-span">40 Anos</span></div>
-      <div class="stat-badge warning">SUPRIMENTOS: <span id="supplies-val">70%</span></div>
-      <div class="stat-badge tower">TORRES: <span id="towers-val">0/3</span></div>
-      <div id="status-safe" class="stat-badge safe" style="display: none;">[ESCONDERIJO]</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD SUPERIOR -->
+    <div id="hud">
+      <div class="hud-card">
+        <span class="hud-label">SOBREVIVENTE</span>
+        <span id="display-player-name" class="hud-value">---</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">TEMPO DE VIDA</span>
+        <span id="life-span" class="hud-value">35 Anos</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">SUPRIMENTOS</span>
+        <span id="supplies-val" class="hud-value">70%</span>
+      </div>
+      <div class="hud-card" style="border-left-color: #00e5ff;">
+        <span class="hud-label">CÁPSULAS DE SORO</span>
+        <span id="capsules-val" class="hud-value" style="color: #00e5ff;">0/3</span>
+      </div>
+      <div id="status-safe" class="hud-card safe-badge" style="display: none;">
+        CÁPSULA DE ESTASE (TEMPO PAUSADO)
+      </div>
       <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
-    </header>
+    </div>
 
-    <!-- MINIMAPA CONTAINER (CANTO SUPERIOR DIREITO) -->
-    <div class="minimap-wrapper">
-      <canvas id="minimapCanvas" width="130" height="130"></canvas>
+    <!-- MINIMAPA NO CANTO SUPERIOR DIREITO -->
+    <div id="minimap-container">
+      <div class="minimap-header">RADAR BIOLÓGICO</div>
+      <canvas id="minimapCanvas" width="160" height="160"></canvas>
       <div class="minimap-legend">
-        <span style="color:#00ccff">●Você</span>
-        <span style="color:#00ff88">■Abrigo</span>
-        <span style="color:#ffcc00">▲Torre</span>
-        <span style="color:#ff0033">●Zumbi</span>
+        <span style="color:#ff69b4;">● Você</span>
+        <span style="color:#00e5ff;">◆ Soro</span>
+        <span style="color:#ffcc00;">★ Câmara</span>
+        <span style="color:#ff0033;">● Zumbi</span>
       </div>
     </div>
 
-    <!-- NOTIFICAÇÃO DE ITEM / TORRE -->
-    <div id="item-popup" class="item-popup" style="display: none;"></div>
+    <!-- NOTIFICAÇÃO DE COLETA -->
+    <div id="item-popup" style="display: none;"></div>
 
-    <!-- BARRA DE PROGRESSO PARA LIGAR TORRE -->
-    <div id="tower-progress-box" class="progress-box" style="display: none;">
-      <div class="progress-label">RELIGANDO TRANSMISSOR...</div>
-      <div class="progress-track">
-        <div id="tower-progress-fill" class="progress-fill"></div>
+    <!-- BARRA DE PROGRESSO DA CÂMARA DE REGENERAÇÃO -->
+    <div id="tower-progress-box" style="display: none;">
+      <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #00ff88; margin-bottom: 8px;">SINTETIZANDO SORO GENÉTICO...</div>
+      <div class="progress-bar-bg">
+        <div id="tower-progress-fill"></div>
       </div>
     </div>
 
-    <!-- PROMPTS DE INTERAÇÃO -->
-    <div id="interaction-prompt" class="prompt-box" style="display: none;">
+    <!-- AVISO DE INTERAÇÃO -->
+    <div id="interaction-prompt" style="display: none;">
       Pressione <span class="key-highlight">[E]</span> para interagir
     </div>
 
-    <!-- CAIXA DE DIÁLOGO E DECISÃO -->
-    <div id="dialog-box" class="dialog-card" style="display: none;">
-      <h3 id="npc-name" class="npc-title">Sobrevivente</h3>
-      <p id="npc-text" class="npc-message">...</p>
+    <!-- CAIXA DE DIÁLOGO -->
+    <div id="dialog-box" style="display: none;">
+      <div class="dialog-header">
+        <span id="npc-name">SOBREVIVENTE</span>
+        <button class="btn-close" onclick="fecharDialogo()">X</button>
+      </div>
+      <p id="npc-text">...</p>
       <div id="dialog-options" class="options-grid"></div>
     </div>
   </div>
-
-  <!-- CANVAS PRINCIPAL -->
-  <canvas id="gameCanvas"></canvas>
 
   <script src="script.js"></script>
 </body>
