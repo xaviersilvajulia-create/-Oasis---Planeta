@@ -150,15 +150,33 @@ const shelters = [
   { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
 ];
 
-// CONSTRUÇÕES QUEBRADAS (ALGUMAS COM FOGO ATIVO)
-const ruins = [
-  { x: 800, y: 1100, w: 115, h: 95, type: 'building', onFire: true },
-  { x: 1500, y: 600, w: 140, h: 90, type: 'house', onFire: false },
-  { x: 600, y: 600, w: 95, h: 80, type: 'rubble', onFire: true },
-  { x: 1300, y: 1500, w: 125, h: 105, type: 'building', onFire: true },
-  { x: 1100, y: 1000, w: 105, h: 75, type: 'house', onFire: false },
-  { x: 1650, y: 1050, w: 110, h: 85, type: 'rubble', onFire: false },
-  { x: 920, y: 520, w: 120, h: 85, type: 'house', onFire: true }
+// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO (COM PORTA ABERTA E INTERIOR DETALHADO)
+const buildings = [
+  {
+    x: 780, y: 1080, w: 170, h: 145,
+    doorSide: 'bottom', doorPos: 65, doorWidth: 42,
+    type: 'clinic', title: 'POSTO MÉDICO', onFire: true
+  },
+  {
+    x: 1480, y: 580, w: 185, h: 150,
+    doorSide: 'bottom', doorPos: 72, doorWidth: 44,
+    type: 'house', title: 'CASA ABANDONADA', onFire: false
+  },
+  {
+    x: 1280, y: 1450, w: 180, h: 150,
+    doorSide: 'top', doorPos: 68, doorWidth: 44,
+    type: 'warehouse', title: 'DEPÓSITO', onFire: true
+  },
+  {
+    x: 880, y: 490, w: 165, h: 140,
+    doorSide: 'bottom', doorPos: 60, doorWidth: 42,
+    type: 'house', title: 'RESIDÊNCIA 04', onFire: false
+  },
+  {
+    x: 1620, y: 1020, w: 175, h: 145,
+    doorSide: 'left', doorPos: 52, doorWidth: 42,
+    type: 'clinic', title: 'LABORATÓRIO', onFire: true
+  }
 ];
 
 // CARROS DESTRUÍDOS PELO CAMINHO (COM COLISÃO E ALGUNS PEGANDO FOGO)
@@ -171,12 +189,14 @@ const wreckedCars = [
   { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
+// SUPRIMENTOS (INCLUINDO ITENS DENTRO DAS CONSTRUÇÕES PARA INCENTIVAR ENTRAR)
 const itemsOnGround = [
   { id: 1, x: 1150, y: 880, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
-  { id: 2, x: 1450, y: 1100, type: 'food', name: 'Ração Militar em Lata', years: 2, supp: 15, collected: false },
-  { id: 3, x: 750, y: 550, type: 'med', name: 'Kit de Primeiros Socorros', years: 5, supp: 5, collected: false },
+  { id: 2, x: 840, y: 1130, type: 'med', name: 'Kit Cirúrgico (Interior)', years: 6, supp: 15, collected: false },
+  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Enlatada (Interior)', years: 4, supp: 15, collected: false },
   { id: 4, x: 1750, y: 1350, type: 'water', name: 'Galão de Água Filtrada', years: 4, supp: 15, collected: false },
-  { id: 5, x: 1220, y: 1550, type: 'med', name: 'Adrenalina Sintética', years: 5, supp: 10, collected: false }
+  { id: 5, x: 1360, y: 1525, type: 'med', name: 'Adrenalina Sintética (Interior)', years: 5, supp: 15, collected: false },
+  { id: 6, x: 1710, y: 1085, type: 'water', name: 'Cantil Militar (Interior)', years: 4, supp: 10, collected: false }
 ];
 
 const npcs = [
@@ -197,7 +217,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Encontramos uma poça com água acumulada perto do prédio quebrado. O grupo tem sede. O que fazemos?",
+    dialog: "Encontramos uma poça com água acumulada perto das construções. O grupo tem sede. O que fazemos?",
     options: [
       { text: "Beber a água diretamente para aliviar a desidratação.", years: -8, supp: 5, resp: "A água estava contaminada! Perdeste 8 anos de vida por infecção." },
       { text: "Ferver e filtrar com o pano antes de beber qualquer gole.", years: 4, supp: 10, resp: "Fizeste uma boa escolha! A água purificada recuperou a tua saúde." }
@@ -207,8 +227,8 @@ const npcs = [
   {
     id: 2,
     name: "Doutora Elena",
-    x: 850,
-    y: 1250,
+    x: 990,
+    y: 1210,
     width: 26,
     height: 40,
     skinColor: '#ffdbac',
@@ -221,10 +241,10 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Uma caixa de suprimentos caiu dentro da casinha destruída. Pode ter remédios ou ser perigosa.",
+    dialog: "Deixei suprimentos dentro do Posto Médico aqui ao lado, mas o prédio está pegando fogo. Vale a pena arriscar?",
     options: [
-      { text: "Entrar com cuidado para resgatar a caixa.", years: 5, supp: 15, resp: "Encontraste medicamentos intactos entre as ruínas!" },
-      { text: "Ignorar a caixa para não arriscar um desabamento.", years: -3, supp: 0, resp: "Evitaste o perigo, mas o desgaste do caminho extra custou tempo de vida." }
+      { text: "Entrar pela porta e vasculhar as prateleiras internas.", years: 5, supp: 15, resp: "Encontraste medicamentos intactos dentro das salas!" },
+      { text: "Ignorar o prédio para não arriscar a fumaça.", years: -3, supp: 0, resp: "Evitaste o perigo, mas a falta de remédios desgastou tua saúde." }
     ],
     solved: false
   }
@@ -232,7 +252,7 @@ const npcs = [
 
 const zombies = [
   { x: 1600, y: 900, width: 26, height: 40, speed: 1.3, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 900, y: 600, width: 26, height: 40, speed: 1.1, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 900, y: 680, width: 26, height: 40, speed: 1.1, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
   { x: 1100, y: 1400, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
   { x: 500, y: 900, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
   { x: 1850, y: 700, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
@@ -338,18 +358,75 @@ function atualizarSomTensao() {
   }
 }
 
-// COLISÃO COM CONSTRUÇÕES QUEBRADAS E CARROS DESTRUÍDOS
+// GERA OS SEGMENTOS SÓLIDOS DAS PAREDES (DEIXANDO A PORTA ABERTA PARA ENTRAR)
+function obterParedesConstrucao(b) {
+  const t = 10; // Espessura da parede
+  const walls = [];
+
+  // Parede Superior
+  if (b.doorSide === 'top') {
+    walls.push({ x: b.x, y: b.y, w: b.doorPos, h: t });
+    walls.push({ x: b.x + b.doorPos + b.doorWidth, y: b.y, w: b.w - (b.doorPos + b.doorWidth), h: t });
+  } else {
+    walls.push({ x: b.x, y: b.y, w: b.w, h: t });
+  }
+
+  // Parede Inferior
+  if (b.doorSide === 'bottom') {
+    walls.push({ x: b.x, y: b.y + b.h - t, w: b.doorPos, h: t });
+    walls.push({ x: b.x + b.doorPos + b.doorWidth, y: b.y + b.h - t, w: b.w - (b.doorPos + b.doorWidth), h: t });
+  } else {
+    walls.push({ x: b.x, y: b.y + b.h - t, w: b.w, h: t });
+  }
+
+  // Parede Esquerda
+  if (b.doorSide === 'left') {
+    walls.push({ x: b.x, y: b.y, w: t, h: b.doorPos });
+    walls.push({ x: b.x, y: b.y + b.doorPos + b.doorWidth, w: t, h: b.h - (b.doorPos + b.doorWidth) });
+  } else {
+    walls.push({ x: b.x, y: b.y, w: t, h: b.h });
+  }
+
+  // Parede Direita
+  if (b.doorSide === 'right') {
+    walls.push({ x: b.x + b.w - t, y: b.y, w: t, h: b.doorPos });
+    walls.push({ x: b.x + b.w - t, y: b.y + b.doorPos + b.doorWidth, w: t, h: b.h - (b.doorPos + b.doorWidth) });
+  } else {
+    walls.push({ x: b.x + b.w - t, y: b.y, w: t, h: b.h });
+  }
+
+  return walls;
+}
+
+// VERIFICA SE O JOGADOR ESTÁ DENTRO DA CONSTRUÇÃO
+function jogadorDentroDe(b) {
+  const cx = player.x + player.width / 2;
+  const cy = player.y + player.height / 2;
+  return cx > b.x && cx < b.x + b.w && cy > b.y && cy < b.y + b.h;
+}
+
+// COLISÃO COM AS PAREDES DAS CONSTRUÇÕES (PORTA LIVRE) E CARROS DESTRUÍDOS
 function checarColisaoObstaculos(nextX, nextY) {
-  for (let r of ruins) {
-    if (
-      nextX < r.x + r.w &&
-      nextX + player.width > r.x &&
-      nextY < r.y + r.h &&
-      nextY + player.height > r.y
-    ) {
-      return true;
+  // Usa a hitbox dos pés do personagem para entrar pela porta com facilidade
+  const footX = nextX + 4;
+  const footY = nextY + 18;
+  const footW = player.width - 8;
+  const footH = player.height - 18;
+
+  for (let b of buildings) {
+    const walls = obterParedesConstrucao(b);
+    for (let w of walls) {
+      if (
+        footX < w.x + w.w &&
+        footX + footW > w.x &&
+        footY < w.y + w.h &&
+        footY + footH > w.y
+      ) {
+        return true;
+      }
     }
   }
+
   for (let c of wreckedCars) {
     if (
       nextX < c.x + c.w &&
@@ -483,7 +560,7 @@ function verificarInteracoes() {
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
-    if (dist < 35) {
+    if (dist < 38) {
       activeItem = item;
       prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.name}`;
       prompt.style.display = 'block';
@@ -625,7 +702,6 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
   const flicker1 = Math.sin(animFrame * 0.35 + fx) * 3 * escala;
   const flicker2 = Math.cos(animFrame * 0.45 + fy) * 2.5 * escala;
 
-  // 1. Halo de luz quente no solo
   const glow = ctx.createRadialGradient(fx, fy, 2, fx, fy, 36 * escala);
   glow.addColorStop(0, 'rgba(255, 130, 0, 0.42)');
   glow.addColorStop(1, 'rgba(255, 50, 0, 0)');
@@ -634,7 +710,6 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
   ctx.arc(fx, fy, 36 * escala, 0, Math.PI * 2);
   ctx.fill();
 
-  // 2. Partículas de fumaça subindo
   for (let i = 0; i < 3; i++) {
     const progress = ((animFrame * 0.8 + i * 22 + fx) % 60) / 60;
     const smokeY = fy - 12 * escala - progress * 35 * escala;
@@ -647,7 +722,6 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
     ctx.fill();
   }
 
-  // 3. Chama externa (Vermelho-Laranja)
   ctx.fillStyle = '#ff3b00';
   ctx.beginPath();
   ctx.moveTo(fx - 10 * escala, fy + 2);
@@ -656,7 +730,6 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
   ctx.closePath();
   ctx.fill();
 
-  // 4. Chama média (Laranja brilhante)
   ctx.fillStyle = '#ff9100';
   ctx.beginPath();
   ctx.moveTo(fx - 6.5 * escala, fy + 2);
@@ -665,7 +738,6 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
   ctx.closePath();
   ctx.fill();
 
-  // 5. Núcleo da chama (Amarelo claro)
   ctx.fillStyle = '#fff066';
   ctx.beginPath();
   ctx.arc(fx, fy - 3 * escala, 3.5 * escala, 0, Math.PI * 2);
@@ -673,84 +745,134 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
 }
 
 // ==========================================
-// CONSTRUÇÕES QUEBRADAS E CARROS DESTRUÍDOS
+// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO (CHÃO, MÓVEIS E TETO CUTAWAY)
 // ==========================================
-function desenharConstrucaoQuebrada(r) {
-  const rx = r.x - camera.x;
-  const ry = r.y - camera.y;
+function desenharConstrucaoInterior(b) {
+  const bx = b.x - camera.x;
+  const by = b.y - camera.y;
 
-  if (rx < -200 || rx > canvas.width + 200 || ry < -200 || ry > canvas.height + 200) return;
+  if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) return;
 
-  // Sombra projetada
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(rx + 8, ry + 10, r.w, r.h);
+  const isInside = jogadorDentroDe(b);
 
-  // Pedras e entulho espalhados
-  ctx.fillStyle = '#3b2e26';
-  ctx.fillRect(rx - 8, ry + r.h - 10, 14, 10);
-  ctx.fillRect(rx + r.w - 6, ry - 6, 12, 9);
-  ctx.fillStyle = '#524136';
-  ctx.fillRect(rx + r.w + 4, ry + r.h - 18, 9, 8);
-  ctx.fillRect(rx - 10, ry + 14, 8, 8);
+  // 1. Sombra externa da construção
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(bx + 8, by + 10, b.w, b.h);
 
-  // Piso interno
-  ctx.fillStyle = '#251d18';
-  ctx.fillRect(rx, ry, r.w, r.h);
+  // 2. Piso interno (Azulejo quebrado na clínica/lab, madeira/concreto nas casas)
+  ctx.fillStyle = b.type === 'clinic' ? '#2c343b' : '#2d241e';
+  ctx.fillRect(bx, by, b.w, b.h);
 
-  // Paredes quebradas
-  ctx.fillStyle = r.type === 'building' ? '#4a3b32' : '#573c2c';
-  ctx.beginPath();
-  ctx.moveTo(rx, ry + 12);
-  ctx.lineTo(rx + 18, ry);
-  ctx.lineTo(rx + r.w * 0.45, ry + 8);
-  ctx.lineTo(rx + r.w * 0.65, ry);
-  ctx.lineTo(rx + r.w, ry + 14);
-  ctx.lineTo(rx + r.w - 6, ry + r.h * 0.5);
-  ctx.lineTo(rx + r.w, ry + r.h - 8);
-  ctx.lineTo(rx + r.w * 0.7, ry + r.h);
-  ctx.lineTo(rx + r.w * 0.35, ry + r.h - 10);
-  ctx.lineTo(rx, ry + r.h);
-  ctx.lineTo(rx + 7, ry + r.h * 0.55);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = '#1f1713';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  // Interior desabado
-  ctx.fillStyle = '#140f0c';
-  ctx.beginPath();
-  ctx.moveTo(rx + 16, ry + 18);
-  ctx.lineTo(rx + r.w - 22, ry + 16);
-  ctx.lineTo(rx + r.w - 16, ry + r.h - 20);
-  ctx.lineTo(rx + 22, ry + r.h - 16);
-  ctx.closePath();
-  ctx.fill();
-
-  // Vigas enferrujadas
-  ctx.strokeStyle = '#7a3b1e';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(rx + 12, ry + r.h - 14);
-  ctx.lineTo(rx + r.w - 15, ry + 14);
-  ctx.moveTo(rx + 25, ry + 12);
-  ctx.lineTo(rx + r.w * 0.65, ry + r.h - 12);
-  ctx.stroke();
-
-  // Janelas quebradas
-  ctx.fillStyle = '#120d0a';
-  ctx.fillRect(rx + 14, ry + r.h - 22, 16, 12);
-  if (r.w > 110) {
-    ctx.fillRect(rx + r.w - 34, ry + r.h - 22, 16, 12);
+  // Grade de piso interno (azulejos ou tábuas)
+  ctx.strokeStyle = b.type === 'clinic' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.28)';
+  ctx.lineWidth = 1;
+  for (let px = bx + 20; px < bx + b.w; px += 20) {
+    ctx.beginPath(); ctx.moveTo(px, by); ctx.lineTo(px, by + b.h); ctx.stroke();
+  }
+  for (let py = by + 20; py < by + b.h; py += 20) {
+    ctx.beginPath(); ctx.moveTo(bx, py); ctx.lineTo(bx + b.w, py); ctx.stroke();
   }
 
-  // Fogo queimando na ruína
-  if (r.onFire) {
-    desenharFogoAnimado(rx + r.w * 0.45, ry + r.h * 0.45, 1.15);
-    if (r.w > 110) {
-      desenharFogoAnimado(rx + r.w * 0.72, ry + r.h * 0.65, 0.85);
-    }
+  // 3. Mobiliário e detalhes internos visíveis
+  if (b.type === 'clinic') {
+    // Maca hospitalar quebrada no canto superior direito
+    ctx.fillStyle = '#5a6875';
+    ctx.fillRect(bx + b.w - 52, by + 18, 36, 18);
+    ctx.fillStyle = '#8b2635'; // Lençol manchado
+    ctx.fillRect(bx + b.w - 48, by + 21, 24, 12);
+
+    // Armário de remédios tombado no canto esquerdo
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(bx + 16, by + 18, 22, 34);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 16, by + 18, 22, 34);
+  } else if (b.type === 'house') {
+    // Tapete rasgado no centro
+    ctx.fillStyle = '#4a2520';
+    ctx.fillRect(bx + b.w / 2 - 28, by + b.h / 2 - 18, 56, 36);
+
+    // Mesa quebrada e cadeira tombada
+    ctx.fillStyle = '#5c3d28';
+    ctx.fillRect(bx + 20, by + 20, 34, 22);
+    ctx.fillStyle = '#3d281a';
+    ctx.fillRect(bx + b.w - 44, by + 22, 24, 24);
+  } else {
+    // Caixotes de madeira e barris enferrujados no depósito
+    ctx.fillStyle = '#6b492b';
+    ctx.fillRect(bx + 18, by + 20, 26, 26);
+    ctx.strokeStyle = '#2b1d10';
+    ctx.strokeRect(bx + 18, by + 20, 26, 26);
+
+    ctx.fillStyle = '#7c2d12';
+    ctx.beginPath();
+    ctx.arc(bx + b.w - 30, by + b.h - 32, 11, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Rachaduras e entulho no chão interno
+  ctx.strokeStyle = '#14100d';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(bx + 35, by + b.h - 25);
+  ctx.lineTo(bx + 55, by + b.h - 42);
+  ctx.lineTo(bx + 70, by + b.h - 35);
+  ctx.stroke();
+
+  // 4. Paredes externas sólidas com abertura da porta
+  const walls = obterParedesConstrucao(b);
+  ctx.fillStyle = '#59463a';
+  ctx.strokeStyle = '#1c1511';
+  ctx.lineWidth = 2;
+
+  for (let w of walls) {
+    const wx = w.x - camera.x;
+    const wy = w.y - camera.y;
+    ctx.fillRect(wx, wy, w.w, w.h);
+    ctx.strokeRect(wx, wy, w.w, w.h);
+  }
+
+  // Soleira da porta (indicando claramente por onde entrar)
+  ctx.fillStyle = 'rgba(255, 204, 0, 0.22)';
+  if (b.doorSide === 'bottom') {
+    ctx.fillRect(bx + b.doorPos, by + b.h - 10, b.doorWidth, 10);
+  } else if (b.doorSide === 'top') {
+    ctx.fillRect(bx + b.doorPos, by, b.doorWidth, 10);
+  } else if (b.doorSide === 'left') {
+    ctx.fillRect(bx, by + b.doorPos, 10, b.doorWidth);
+  }
+
+  // 5. Fogo queimando na estrutura (canto sem bloquear a porta)
+  if (b.onFire) {
+    desenharFogoAnimado(bx + b.w - 28, by + 32, 0.9);
+  }
+
+  // Placa identificando o prédio na fachada
+  ctx.fillStyle = isInside ? '#00ff88' : '#d6c3b3';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.fillText(isInside ? `${b.title} (INTERIOR)` : b.title, bx + 12, by - 6);
+}
+
+// Teto semi-transparente que abre quando você entra na construção
+function desenharTetosConstrucoes() {
+  for (let b of buildings) {
+    if (jogadorDentroDe(b)) continue; // Revela todo o interior quando entra!
+
+    const bx = b.x - camera.x;
+    const by = b.y - camera.y;
+    if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) continue;
+
+    // Cobertura parcial com buraco grande no teto quebrado (deixa espiar o interior de fora)
+    ctx.fillStyle = 'rgba(38, 29, 24, 0.68)';
+    ctx.beginPath();
+    ctx.rect(bx + 10, by + 10, b.w - 20, b.h - 20);
+    // Buraco irregular no meio do telhado destruído
+    ctx.moveTo(bx + 35, by + 35);
+    ctx.lineTo(bx + b.w - 40, by + 30);
+    ctx.lineTo(bx + b.w - 30, by + b.h - 35);
+    ctx.lineTo(bx + 30, by + b.h - 40);
+    ctx.closePath();
+    ctx.fill('evenodd');
   }
 }
 
@@ -760,31 +882,27 @@ function desenharCarroDestruido(c) {
 
   if (cx < -150 || cx > canvas.width + 150 || cy < -150 || cy > canvas.height + 150) return;
 
-  // 1. Sombra no asfalto/terra
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.beginPath();
   ctx.ellipse(cx + c.w / 2, cy + c.h + 2, c.w * 0.52, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 2. Peças e estilhaços de vidro no chão ao redor
   ctx.fillStyle = 'rgba(160, 210, 230, 0.35)';
   ctx.fillRect(cx + 12, cy + c.h + 4, 4, 3);
   ctx.fillRect(cx + c.w - 18, cy - 4, 5, 3);
   ctx.fillStyle = '#2b2420';
   ctx.fillRect(cx - 5, cy + c.h - 4, 8, 5);
 
-  // 3. Pneus furados / faltando
   ctx.fillStyle = '#141414';
   ctx.beginPath();
-  ctx.arc(cx + 14, cy + c.h, 7, 0, Math.PI * 2); // Roda traseira/dianteira
+  ctx.arc(cx + 14, cy + c.h, 7, 0, Math.PI * 2);
   ctx.fill();
-  // Aro enferrujado sem pneu na outra ponta
+
   ctx.fillStyle = '#5c3422';
   ctx.beginPath();
   ctx.arc(cx + c.w - 14, cy + c.h + 1, 5, 0, Math.PI * 2);
   ctx.fill();
 
-  // 4. Lataria principal amassada e enferrujada
   ctx.fillStyle = c.color;
   ctx.strokeStyle = '#1a1412';
   ctx.lineWidth = 2;
@@ -793,7 +911,6 @@ function desenharCarroDestruido(c) {
   ctx.fill();
   ctx.stroke();
 
-  // 5. Cabine / Teto amassado com vidros estilhaçados
   ctx.fillStyle = '#26211e';
   ctx.beginPath();
   ctx.moveTo(cx + 14, cy + 10);
@@ -804,17 +921,14 @@ function desenharCarroDestruido(c) {
   ctx.fill();
   ctx.stroke();
 
-  // Janelas quebradas (frestas escuras)
   ctx.fillStyle = '#0d0b0a';
   ctx.fillRect(cx + 22, cy + 3, 12, 6);
   ctx.fillRect(cx + 37, cy + 3, 12, 6);
 
-  // 6. Capô amassado e marcas de ferrugem
   ctx.fillStyle = 'rgba(130, 55, 25, 0.55)';
   ctx.fillRect(cx + 6, cy + 14, 16, 8);
   ctx.fillRect(cx + c.w - 22, cy + 15, 14, 7);
 
-  // 7. Fogo saindo do motor/capô se estiver queimando
   if (c.onFire) {
     const hoodX = c.dir === 1 ? cx + c.w - 14 : cx + 14;
     desenharFogoAnimado(hoodX, cy + 12, 0.9);
@@ -851,9 +965,9 @@ function desenharCenario() {
     ctx.fillText('ABRIGO SEGURO', sx + 8, sy + 18);
   }
 
-  // Construções quebradas
-  for (let r of ruins) {
-    desenharConstrucaoQuebrada(r);
+  // Construções exploráveis (piso, móveis e paredes com porta)
+  for (let b of buildings) {
+    desenharConstrucaoInterior(b);
   }
 
   // Carros destruídos
@@ -1081,12 +1195,12 @@ function desenharMinimapa() {
   miniCtx.lineTo(cx + Math.cos(sweepAngle) * 62, cy + Math.sin(sweepAngle) * 62);
   miniCtx.stroke();
 
-  // Construções quebradas no minimapa
+  // Construções exploráveis no minimapa
   miniCtx.fillStyle = 'rgba(130, 115, 105, 0.55)';
-  for (let r of ruins) {
-    const mx = cx + (r.x - player.x) * scale;
-    const my = cy + (r.y - player.y) * scale;
-    miniCtx.fillRect(mx, my, Math.max(3, r.w * scale), Math.max(3, r.h * scale));
+  for (let b of buildings) {
+    const mx = cx + (b.x - player.x) * scale;
+    const my = cy + (b.y - player.y) * scale;
+    miniCtx.fillRect(mx, my, Math.max(4, b.w * scale), Math.max(4, b.h * scale));
   }
 
   // Carros destruídos no minimapa
@@ -1240,6 +1354,9 @@ function desenhar() {
   }
 
   desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
+
+  // Teto parcial das construções (some automaticamente quando você entra)
+  desenharTetosConstrucoes();
 
   desenharIluminacaoEClima();
 }
