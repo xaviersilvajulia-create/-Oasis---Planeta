@@ -1,26 +1,30 @@
 let canvas, ctx, miniCanvas, miniCtx;
-let playerName = "Sobrevivente";
-let lifeYears = 35; // Expectativa de vida inicial curta!
+let playerName = "Piloto";
+let lifeYears = 35;
 let supplies = 70;
 let activeNPC = null;
 let activeItem = null;
-let activeChamber = null;
+let activeShip = null;
 let inDialog = false;
 let animFrame = 0;
 let agingTimer = 0;
 let flashDamage = 0;
 let isGameOver = false;
 let isVictory = false;
+let isLaunching = false;
 
 // ==========================================
-// SISTEMA DE ÁUDIO DE TENSÃO (WEB AUDIO API)
+// SISTEMA DE ÁUDIO E EFEITOS SONOROS (WEB AUDIO API)
 // ==========================================
 let audioCtx = null;
 let audioEnabled = true;
 let droneOsc1 = null;
 let droneOsc2 = null;
 let droneGain = null;
+let engineOsc = null;
+let engineGain = null;
 let heartbeatTimer = 0;
+let stepSoundTimer = 0;
 let isBeingChased = false;
 
 function iniciarAudio() {
@@ -28,21 +32,22 @@ function iniciarAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AudioContext();
 
+  // Ambiente tenso de fundo
   droneOsc1 = audioCtx.createOscillator();
   droneOsc2 = audioCtx.createOscillator();
   droneGain = audioCtx.createGain();
 
   droneOsc1.type = 'sawtooth';
-  droneOsc1.frequency.value = 55;
+  droneOsc1.frequency.value = 52;
 
   droneOsc2.type = 'sine';
-  droneOsc2.frequency.value = 58.27;
+  droneOsc2.frequency.value = 55.5;
 
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.value = 140;
+  filter.frequency.value = 135;
 
-  droneGain.gain.value = audioEnabled ? 0.08 : 0;
+  droneGain.gain.value = audioEnabled ? 0.07 : 0;
 
   droneOsc1.connect(filter);
   droneOsc2.connect(filter);
@@ -51,6 +56,22 @@ function iniciarAudio() {
 
   droneOsc1.start();
   droneOsc2.start();
+
+  // Oscilador contínuo dos propulsores da nave (silencioso até iniciar decolagem)
+  engineOsc = audioCtx.createOscillator();
+  engineGain = audioCtx.createGain();
+  const engineFilter = audioCtx.createBiquadFilter();
+
+  engineOsc.type = 'sawtooth';
+  engineOsc.frequency.value = 45;
+  engineFilter.type = 'lowpass';
+  engineFilter.frequency.value = 260;
+  engineGain.gain.value = 0;
+
+  engineOsc.connect(engineFilter);
+  engineFilter.connect(engineGain);
+  engineGain.connect(audioCtx.destination);
+  engineOsc.start();
 }
 
 function alternarAudio() {
@@ -58,7 +79,26 @@ function alternarAudio() {
   const btn = document.getElementById('audio-toggle');
   if (btn) btn.innerText = audioEnabled ? 'SOM: ON' : 'SOM: OFF';
   if (droneGain && audioCtx) {
-    droneGain.gain.setTargetAtTime(audioEnabled ? 0.08 : 0, audioCtx.currentTime, 0.1);
+    droneGain.gain.setTargetAtTime(audioEnabled ? 0.07 : 0, audioCtx.currentTime, 0.1);
+  }
+  if (!audioEnabled && engineGain && audioCtx) {
+    engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+  }
+}
+
+function atualizarSomMotorNave(ativo, progresso) {
+  if (!audioCtx || !engineGain || !engineOsc) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  if (ativo && audioEnabled) {
+    // O ronco do motor sobe de tom e volume conforme chega perto de 100%
+    const freq = 45 + (progresso * 1.1);
+    const vol = Math.min(0.24, 0.08 + (progresso / 100) * 0.16);
+    engineOsc.frequency.setTargetAtTime(freq, now, 0.08);
+    engineGain.gain.setTargetAtTime(vol, now, 0.08);
+  } else {
+    engineGain.gain.setTargetAtTime(0, now, 0.12);
   }
 }
 
@@ -73,7 +113,15 @@ function tocarEfeitoSonoro(tipo) {
 
   const now = audioCtx.currentTime;
 
-  if (tipo === 'heartbeat') {
+  if (tipo === 'step') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140 + Math.random() * 25, now);
+    osc.frequency.exponentialRampToValueAtTime(60, now + 0.04);
+    gain.gain.setValueAtTime(0.03, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    osc.start(now);
+    osc.stop(now + 0.045);
+  } else if (tipo === 'heartbeat') {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(75, now);
     osc.frequency.exponentialRampToValueAtTime(35, now + 0.18);
@@ -89,15 +137,26 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
     osc.start(now);
     osc.stop(now + 0.25);
-  } else if (tipo === 'capsule') {
+  } else if (tipo === 'ship_part') {
+    // Som tecnológico de peça da nave acoplada
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(523, now);
-    osc.frequency.setValueAtTime(659, now + 0.1);
-    osc.frequency.setValueAtTime(784, now + 0.2);
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(554.37, now + 0.09);
+    osc.frequency.setValueAtTime(659.25, now + 0.18);
+    osc.frequency.setValueAtTime(880, now + 0.27);
     gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
     osc.start(now);
-    osc.stop(now + 0.35);
+    osc.stop(now + 0.42);
+  } else if (tipo === 'launch_alarm') {
+    // Bip de contagem regressiva da nave
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.setValueAtTime(660, now + 0.06);
+    gain.gain.setValueAtTime(0.07, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.12);
   } else if (tipo === 'damage') {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(110, now);
@@ -108,32 +167,25 @@ function tocarEfeitoSonoro(tipo) {
     osc.stop(now + 0.25);
   } else if (tipo === 'tick_year') {
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.setValueAtTime(240, now);
     gain.gain.setValueAtTime(0.04, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc.start(now);
     osc.stop(now + 0.08);
-  } else if (tipo === 'tower_tick') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(520 + Math.random() * 120, now);
-    gain.gain.setValueAtTime(0.06, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+  } else if (tipo === 'liftoff') {
+    // Som de decolagem subindo aos céus
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(90, now);
+    osc.frequency.exponentialRampToValueAtTime(720, now + 1.1);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     osc.start(now);
-    osc.stop(now + 0.08);
-  } else if (tipo === 'victory') {
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(330, now);
-    osc.frequency.setValueAtTime(440, now + 0.15);
-    osc.frequency.setValueAtTime(659, now + 0.3);
-    gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-    osc.start(now);
-    osc.stop(now + 0.7);
+    osc.stop(now + 1.2);
   }
 }
 
 // ==========================================
-// CÂMERA, JOGADOR (BONECA DE ROSA) E OBJETIVOS
+// CÂMERA, JOGADOR (BONECA DE ROSA) E NAVE
 // ==========================================
 const camera = { x: 0, y: 0 };
 
@@ -157,20 +209,20 @@ const player = {
 
 const keys = {};
 
-// OBJETIVO PRINCIPAL: CÂMARA DE REGENERAÇÃO GENÉTICA
-const regenerationChamber = {
-  x: 1180,
-  y: 780,
-  width: 54,
-  height: 54,
+// PLATAFORMA DE LANÇAMENTO E CÁPSULA ESPACIAL
+const escapeShip = {
+  x: 1165,
+  y: 720,
+  width: 96,
+  height: 110,
   progress: 0,
-  activated: false,
-  name: "Câmara de Regeneração"
+  launched: false,
+  name: "Cápsula Orbital Aurora"
 };
 
 // ESCONDERIJOS (CÁPSULAS DE ESTASE QUE PAUSAM O ENVELHECIMENTO)
 const shelters = [
-  { x: 1000, y: 700, width: 140, height: 110, name: "Abrigo de Estase A" },
+  { x: 950, y: 700, width: 140, height: 110, name: "Abrigo de Estase A" },
   { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker de Estase B" },
   { x: 400, y: 1500, width: 150, height: 120, name: "Abrigo de Estase C" }
 ];
@@ -206,7 +258,7 @@ const buildings = [
 
 // CARROS DESTRUÍDOS PELO CAMINHO
 const wreckedCars = [
-  { x: 1280, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
+  { x: 1310, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
   { x: 960, y: 940, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
   { x: 1420, y: 1280, w: 74, h: 38, color: '#4f4632', onFire: true, dir: 1 },
   { x: 720, y: 820, w: 70, h: 36, color: '#2f353b', onFire: true, dir: -1 },
@@ -214,24 +266,24 @@ const wreckedCars = [
   { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// ITENS NO CHÃO: 3 CÁPSULAS DE SORO GENÉTICO (OBJETIVO) + SUPRIMENTOS QUE GANHAM ANOS DE VIDA
+// AS 3 PEÇAS ESSENCIAIS DA NAVE + SUPRIMENTOS DE TEMPO DE VIDA
 const itemsOnGround = [
-  // 3 CÁPSULAS DE SORO GENÉTICO
-  { id: 101, x: 840, y: 1130, type: 'serum', name: 'Cápsula de Soro Alfa (Posto Médico)', years: 4, supp: 5, collected: false },
-  { id: 102, x: 1710, y: 1085, type: 'serum', name: 'Cápsula de Soro Beta (Laboratório)', years: 4, supp: 5, collected: false },
-  { id: 103, x: 1360, y: 1525, type: 'serum', name: 'Cápsula de Soro Gama (Depósito)', years: 4, supp: 5, collected: false },
+  // 3 PEÇAS DA NAVE
+  { id: 101, x: 840, y: 1130, type: 'ship_part', partIcon: 'suit', name: 'Traje Criogênico (Posto Médico)', years: 4, supp: 10, collected: false },
+  { id: 102, x: 1710, y: 1085, type: 'ship_part', partIcon: 'chip', name: 'Chip de Navegação Estelar (Laboratório)', years: 4, supp: 10, collected: false },
+  { id: 103, x: 1360, y: 1525, type: 'ship_part', partIcon: 'fuel', name: 'Núcleo de Combustível (Depósito)', years: 4, supp: 10, collected: false },
 
   // SUPRIMENTOS PARA GANHAR MAIS TEMPO DE VIDA
-  { id: 1, x: 1150, y: 880, type: 'water', name: 'Água Purificada (+4 Anos)', years: 4, supp: 10, collected: false },
-  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Nutritiva (+5 Anos)', years: 5, supp: 15, collected: false },
-  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Galão Filtrado (+4 Anos)', years: 4, supp: 15, collected: false },
-  { id: 7, x: 940, y: 550, type: 'med', name: 'Estabilizador Celular (+6 Anos)', years: 6, supp: 10, collected: false }
+  { id: 1, x: 1150, y: 920, type: 'water', name: 'Cilindro de Oxigênio (+4 Anos)', years: 4, supp: 10, collected: false },
+  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Espacial (+5 Anos)', years: 5, supp: 15, collected: false },
+  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Água Purificada (+4 Anos)', years: 4, supp: 15, collected: false },
+  { id: 7, x: 940, y: 550, type: 'med', name: 'Soro Antienvelhecimento (+6 Anos)', years: 6, supp: 10, collected: false }
 ];
 
 const npcs = [
   {
     id: 1,
-    name: "Marcus (Sobrevivente)",
+    name: "Marcus (Engenheiro)",
     x: 1350,
     y: 750,
     width: 26,
@@ -246,10 +298,10 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "O relógio biológico não para... Encontramos água parada perto das construções, mas pode estar contaminada.",
+    dialog: "A nave Aurora precisa do Núcleo de Combustível no Depósito ao sul, do Chip no Laboratório e do Traje no Posto Médico. Cuidado: quando ligar os motores, o barulho vai atrair zumbis!",
     options: [
-      { text: "Beber sem filtrar para economizar tempo.", years: -7, supp: 5, resp: "A contaminação acelerou seu envelhecimento! Perdeste 7 anos de vida." },
-      { text: "Gastar alguns minutos fervendo e filtrando a água.", years: 5, supp: 10, resp: "A água limpa recuperou suas células! Ganhaste +5 anos de vida." }
+      { text: "Pegar o cilindro de oxigênio reserva que ele ofereceu.", years: 5, supp: 10, resp: "Respiraste ar puro! Ganhaste +5 anos de vida para buscar as peças." },
+      { text: "Agradecer pela dica e correr direto.", years: 2, supp: 0, resp: "Ganhaste +2 anos de fôlego com a orientação do engenheiro." }
     ],
     solved: false
   },
@@ -270,10 +322,10 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Guardei um estabilizador celular dentro do Posto Médico em chamas, junto com a Cápsula de Soro Alfa.",
+    dialog: "O Traje Criogênico está lá dentro do Posto Médico em chamas. Sem ele você não aguenta a pressão da decolagem!",
     options: [
-      { text: "Entrar no Posto Médico para resgatar os frascos.", years: 6, supp: 15, resp: "Conseguiste o estabilizador celular! Ganhaste +6 anos de vida." },
-      { text: "Desistir e seguir direto sem entrar.", years: -3, supp: 0, resp: "O desgaste sem tratamento custou 3 anos do teu tempo." }
+      { text: "Aplicar dose rápida de estabilizador celular antes de entrar.", years: 6, supp: 15, resp: "Suas células se regeneraram! Ganhaste +6 anos de vida." },
+      { text: "Entrar sem tratamento para não perder segundos.", years: -3, supp: 0, resp: "A fumaça tóxica custou 3 anos do teu tempo de vida." }
     ],
     solved: false
   }
@@ -334,12 +386,14 @@ function reiniciarJogo() {
   agingTimer = 0;
   isGameOver = false;
   isVictory = false;
-  regenerationChamber.activated = false;
-  regenerationChamber.progress = 0;
+  isLaunching = false;
+  escapeShip.launched = false;
+  escapeShip.progress = 0;
 
+  atualizarSomMotorNave(false, 0);
   atualizarHUDVida();
   document.getElementById('supplies-val').innerText = supplies + '%';
-  document.getElementById('capsules-val').innerText = '0/3';
+  document.getElementById('parts-val').innerText = '0/3';
   document.getElementById('game-over-screen').style.display = 'none';
   document.getElementById('victory-screen').style.display = 'none';
 
@@ -352,12 +406,7 @@ function reiniciarJogo() {
 function atualizarHUDVida() {
   const el = document.getElementById('life-span');
   el.innerText = lifeYears + ' Anos';
-  // Pisca em vermelho crítico quando resta 10 anos ou menos
-  if (lifeYears <= 10) {
-    el.style.color = '#ff0033';
-  } else {
-    el.style.color = '#ffffff';
-  }
+  el.style.color = lifeYears <= 10 ? '#ff0033' : '#ffffff';
 }
 
 function gameLoop() {
@@ -372,9 +421,11 @@ function gameLoop() {
     atualizarNPCs();
     atualizarZumbis();
     verificarInteracoes();
-    atualizarSinteseCamara();
+    atualizarDecolagemNave();
     verificarAtaqueZumbi();
     verificarMorte();
+  } else {
+    atualizarSomMotorNave(false, 0);
   }
 
   atualizarSomTensao();
@@ -387,12 +438,10 @@ function gameLoop() {
   }
 }
 
-// O TEMPO DE VIDA CORRE CONTINUAMENTE FORA DOS ABRIGOS DE ESTASE
 function atualizarRelogioBiologico() {
-  if (player.inShelter) return; // Nos abrigos de estase o tempo fica pausado
+  if (player.inShelter) return;
 
   agingTimer++;
-  // A cada ~4.5 segundos (270 frames), perde 1 ano de vida
   if (agingTimer >= 270) {
     agingTimer = 0;
     lifeYears = Math.max(0, lifeYears - 1);
@@ -404,9 +453,10 @@ function atualizarRelogioBiologico() {
 function atualizarSomTensao() {
   if (!audioEnabled || !audioCtx) return;
 
-  if ((isBeingChased && !player.inShelter) || lifeYears <= 10) {
+  if ((isBeingChased && !player.inShelter) || lifeYears <= 10 || isLaunching) {
     heartbeatTimer++;
-    if (heartbeatTimer >= 38) {
+    const rate = isLaunching ? 24 : 38;
+    if (heartbeatTimer >= rate) {
       heartbeatTimer = 0;
       tocarEfeitoSonoro('heartbeat');
     }
@@ -538,6 +588,16 @@ function atualizarJogador() {
 
   if (!checarColisaoObstaculos(nextX, player.y)) player.x = nextX;
   if (!checarColisaoObstaculos(player.x, nextY)) player.y = nextY;
+
+  if (player.isMoving) {
+    stepSoundTimer++;
+    if (stepSoundTimer >= 16) {
+      stepSoundTimer = 0;
+      tocarEfeitoSonoro('step');
+    }
+  } else {
+    stepSoundTimer = 12;
+  }
 }
 
 function atualizarCamera() {
@@ -590,14 +650,18 @@ function atualizarZumbis() {
     }
   }
 
+  // Se a nave estiver aquecendo os motores, o barulho atrai zumbis de longe (raio de 900px)
+  const detectionRadius = isLaunching ? 950 : 380;
+
   for (let z of zombies) {
     const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
     const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
     const dist = Math.hypot(dx, dy);
 
-    if (!player.inShelter && !playerInsideBuilding && dist < 380) {
-      z.vx = (dx / dist) * z.speed;
-      z.vy = (dy / dist) * z.speed;
+    if (!player.inShelter && !playerInsideBuilding && dist < detectionRadius) {
+      const chaseSpeed = isLaunching ? z.speed * 1.25 : z.speed;
+      z.vx = (dx / dist) * chaseSpeed;
+      z.vy = (dy / dist) * chaseSpeed;
       z.isMoving = true;
       z.facing = dx >= 0 ? 1 : -1;
       isBeingChased = true;
@@ -648,30 +712,30 @@ function atualizarZumbis() {
   }
 }
 
-function contarCapsulasColetadas() {
-  return itemsOnGround.filter(i => i.type === 'serum' && i.collected).length;
+function contarPecasColetadas() {
+  return itemsOnGround.filter(i => i.type === 'ship_part' && i.collected).length;
 }
 
 function verificarInteracoes() {
   activeNPC = null;
   activeItem = null;
-  activeChamber = null;
+  activeShip = null;
   const prompt = document.getElementById('interaction-prompt');
 
-  // 1. Interação com a Câmara de Regeneração
-  const distChamber = Math.hypot(
-    (player.x + player.width / 2) - (regenerationChamber.x + regenerationChamber.width / 2),
-    (player.y + player.height / 2) - (regenerationChamber.y + regenerationChamber.height / 2)
+  // 1. Interação com a Nave Espacial
+  const distShip = Math.hypot(
+    (player.x + player.width / 2) - (escapeShip.x + escapeShip.width / 2),
+    (player.y + player.height / 2) - (escapeShip.y + escapeShip.height / 2)
   );
-  if (distChamber < 65 && !regenerationChamber.activated) {
-    const caps = contarCapsulasColetadas();
-    if (caps >= 3) {
-      activeChamber = regenerationChamber;
-      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para sintetizar o Soro na Câmara`;
+  if (distShip < 80 && !escapeShip.launched) {
+    const parts = contarPecasColetadas();
+    if (parts >= 3) {
+      activeShip = escapeShip;
+      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para aquecer motores e DECOLAR!`;
       prompt.style.display = 'block';
       return;
     } else {
-      prompt.innerHTML = `Câmara Bloqueada: Colete as 3 Cápsulas de Soro (${caps}/3)`;
+      prompt.innerHTML = `Nave Incompleta: Colete as 3 Peças (${parts}/3) nas construções`;
       prompt.style.display = 'block';
       return;
     }
@@ -688,7 +752,7 @@ function verificarInteracoes() {
     }
   }
 
-  // 3. Interação com Itens e Cápsulas de Soro
+  // 3. Interação com Peças da Nave e Itens
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
@@ -703,31 +767,38 @@ function verificarInteracoes() {
   prompt.style.display = 'none';
 }
 
-function atualizarSinteseCamara() {
+function atualizarDecolagemNave() {
   const progBox = document.getElementById('tower-progress-box');
   const progFill = document.getElementById('tower-progress-fill');
 
-  if (activeChamber && (keys['e'] || keys[' '])) {
+  if (activeShip && (keys['e'] || keys[' '])) {
+    isLaunching = true;
     progBox.style.display = 'block';
-    activeChamber.progress += 0.7;
-    progFill.style.width = Math.min(100, activeChamber.progress) + '%';
+    activeShip.progress += 0.55;
+    progFill.style.width = Math.min(100, activeShip.progress) + '%';
 
-    if (animFrame % 12 === 0) {
-      tocarEfeitoSonoro('tower_tick');
+    // Som contínuo dos propulsores aquecendo + alarme de contagem regressiva
+    atualizarSomMotorNave(true, activeShip.progress);
+    if (animFrame % 24 === 0) {
+      tocarEfeitoSonoro('launch_alarm');
     }
 
-    if (activeChamber.progress >= 100) {
-      activeChamber.activated = true;
+    if (activeShip.progress >= 100) {
+      activeShip.launched = true;
+      isLaunching = false;
       progBox.style.display = 'none';
+      atualizarSomMotorNave(false, 0);
       isVictory = true;
-      tocarEfeitoSonoro('victory');
-      document.getElementById('victory-stats').innerText = `Tempo Restante Antes da Cura: ${lifeYears} Anos → 85 Anos!`;
+      tocarEfeitoSonoro('liftoff');
+      document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salva na Órbita!`;
       document.getElementById('victory-screen').style.display = 'flex';
     }
   } else {
+    isLaunching = false;
     progBox.style.display = 'none';
-    if (activeChamber && !activeChamber.activated) {
-      activeChamber.progress = Math.max(0, activeChamber.progress - 0.5);
+    atualizarSomMotorNave(false, 0);
+    if (activeShip && !activeShip.launched) {
+      activeShip.progress = Math.max(0, activeShip.progress - 0.4);
     }
   }
 }
@@ -740,14 +811,14 @@ function coletarItem(item) {
   atualizarHUDVida();
   document.getElementById('supplies-val').innerText = supplies + '%';
 
-  if (item.type === 'serum') {
-    const caps = contarCapsulasColetadas();
-    document.getElementById('capsules-val').innerText = `${caps}/3`;
-    tocarEfeitoSonoro('capsule');
-    if (caps === 3) {
-      mostrarPopupItem(`3/3 CÁPSULAS COLETADAS! Vá até a Câmara de Regeneração!`);
+  if (item.type === 'ship_part') {
+    const parts = contarPecasColetadas();
+    document.getElementById('parts-val').innerText = `${parts}/3`;
+    tocarEfeitoSonoro('ship_part');
+    if (parts === 3) {
+      mostrarPopupItem(`3/3 PEÇAS PRONTAS! Corra para a Nave Aurora!`);
     } else {
-      mostrarPopupItem(`Cápsula de Soro (${caps}/3) +${item.years} Anos de Vida!`);
+      mostrarPopupItem(`Peça da Nave (${parts}/3): ${item.name}!`);
     }
   } else {
     tocarEfeitoSonoro('item');
@@ -761,7 +832,7 @@ function mostrarPopupItem(texto) {
   const pop = document.getElementById('item-popup');
   pop.innerText = texto;
   pop.style.display = 'block';
-  setTimeout(() => { pop.style.display = 'none'; }, 2800);
+  setTimeout(() => { pop.style.display = 'none'; }, 3000);
 }
 
 function verificarAtaqueZumbi() {
@@ -781,6 +852,8 @@ function verificarAtaqueZumbi() {
 function verificarMorte() {
   if (lifeYears <= 0 && !isGameOver) {
     isGameOver = true;
+    isLaunching = false;
+    atualizarSomMotorNave(false, 0);
     tocarEfeitoSonoro('damage');
     document.getElementById('game-over-screen').style.display = 'flex';
   }
@@ -819,7 +892,7 @@ function responderNPC(npc, opcao) {
   npc.solved = true;
   document.getElementById('npc-text').innerText = `${opcao.resp}`;
   document.getElementById('dialog-options').innerHTML = `
-    <button class="btn-oasis" onclick="fecharDialogo()">Voltar ao Território</button>
+    <button class="btn-oasis" onclick="fecharDialogo()">Voltar à Missão</button>
   `;
 
   verificarMorte();
@@ -1054,8 +1127,116 @@ function desenharCarroDestruido(c) {
   }
 }
 
+// ==========================================
+// NAVE ESPACIAL NA PLATAFORMA DE LANÇAMENTO
+// ==========================================
+function desenharNaveEspacial() {
+  const sx = escapeShip.x - camera.x;
+  const sy = escapeShip.y - camera.y;
+  const parts = contarPecasColetadas();
+
+  // Base da plataforma de lançamento
+  ctx.fillStyle = '#1e242b';
+  ctx.fillRect(sx - 12, sy + 10, escapeShip.width + 24, escapeShip.height);
+  ctx.strokeStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(sx - 12, sy + 10, escapeShip.width + 24, escapeShip.height);
+
+  // Faixas de segurança amarelas e pretas na base
+  ctx.fillStyle = '#ffcc00';
+  for (let i = -8; i < escapeShip.width + 12; i += 16) {
+    ctx.fillRect(sx + i, sy + escapeShip.height + 4, 8, 5);
+  }
+
+  // Vibração da nave quando os motores estão aquecendo
+  const shakeX = isLaunching ? (Math.random() - 0.5) * 4 : 0;
+  const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
+  const cx = sx + escapeShip.width / 2 + shakeX;
+  const cy = sy + escapeShip.height / 2 + shakeY;
+
+  // Chamas e fumaça dos propulsores durante aquecimento
+  if (isLaunching) {
+    desenharFogoAnimado(cx - 18, sy + escapeShip.height + 6, 1.1);
+    desenharFogoAnimado(cx + 18, sy + escapeShip.height + 6, 1.1);
+  }
+
+  // Asas laterais da nave
+  ctx.fillStyle = '#b91c1c';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 18, cy + 10);
+  ctx.lineTo(cx - 38, cy + 42);
+  ctx.lineTo(cx - 14, cy + 38);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx + 18, cy + 10);
+  ctx.lineTo(cx + 38, cy + 42);
+  ctx.lineTo(cx + 14, cy + 38);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Propulsores inferiores
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(cx - 20, cy + 36, 12, 10);
+  ctx.fillRect(cx + 8, cy + 36, 12, 10);
+
+  // Fuselagem principal da nave (branca/prateada com detalhes rosa)
+  ctx.fillStyle = '#f1f5f9';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 48);
+  ctx.quadraticCurveTo(cx + 26, cy - 15, cx + 22, cy + 38);
+  ctx.lineTo(cx - 22, cy + 38);
+  ctx.quadraticCurveTo(cx - 26, cy - 15, cx, cy - 48);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Bico da nave
+  ctx.fillStyle = '#ff69b4';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 48);
+  ctx.quadraticCurveTo(cx + 11, cy - 32, cx + 12, cy - 26);
+  ctx.lineTo(cx - 12, cy - 26);
+  ctx.quadraticCurveTo(cx - 11, cy - 32, cx, cy - 48);
+  ctx.closePath();
+  ctx.fill();
+
+  // Janela redonda da cabine
+  ctx.fillStyle = '#0ea5e9';
+  ctx.beginPath();
+  ctx.arc(cx, cy - 8, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Reflexo no vidro da janela
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.beginPath();
+  ctx.arc(cx - 3, cy - 11, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3 Luzes indicadoras das peças coletadas no casco da nave
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i < parts ? '#00ff88' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(cx - 10 + i * 10, cy + 14, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Texto de status acima da nave
+  ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
+}
+
 function desenharCenario() {
-  // Abrigos de Estase (pausam o envelhecimento)
+  // Abrigos de Estase
   for (let s of shelters) {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
@@ -1083,33 +1264,7 @@ function desenharCenario() {
     desenharCarroDestruido(c);
   }
 
-  // CÂMARA DE REGENERAÇÃO GENÉTICA (OBJETIVO FINAL)
-  const cx = regenerationChamber.x - camera.x;
-  const cy = regenerationChamber.y - camera.y;
-  const caps = contarCapsulasColetadas();
-
-  // Aura pulsante ao redor da câmara
-  const pulseR = 32 + Math.sin(animFrame * 0.1) * 5;
-  ctx.fillStyle = caps >= 3 ? 'rgba(0, 255, 136, 0.22)' : 'rgba(255, 204, 0, 0.16)';
-  ctx.beginPath();
-  ctx.arc(cx + regenerationChamber.width / 2, cy + regenerationChamber.height / 2, pulseR, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#19232c';
-  ctx.fillRect(cx, cy, regenerationChamber.width, regenerationChamber.height);
-  ctx.strokeStyle = caps >= 3 ? '#00ff88' : '#ffcc00';
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(cx, cy, regenerationChamber.width, regenerationChamber.height);
-
-  // Núcleo de vidro da câmara
-  ctx.fillStyle = caps >= 3 ? '#00e5ff' : '#3a4b5c';
-  ctx.beginPath();
-  ctx.arc(cx + regenerationChamber.width / 2, cy + regenerationChamber.height / 2, 14, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = caps >= 3 ? '#00ff88' : '#ffcc00';
-  ctx.font = '8px "Press Start 2P"';
-  ctx.fillText(`CÂMARA DE CURA (${caps}/3)`, cx - 42, cy - 8);
+  desenharNaveEspacial();
 }
 
 function desenharItemChao(item) {
@@ -1117,9 +1272,9 @@ function desenharItemChao(item) {
   const screenX = item.x - camera.x;
   const screenY = item.y - camera.y;
 
-  if (item.type === 'serum') {
-    // Cápsula de Soro Genético (brilho ciano pulsante)
-    const glow = 13 + Math.sin(animFrame * 0.15) * 3;
+  if (item.type === 'ship_part') {
+    // Peça da nave com aura ciano pulsante
+    const glow = 14 + Math.sin(animFrame * 0.15) * 3;
     ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
     ctx.beginPath();
     ctx.arc(screenX, screenY, glow, 0, Math.PI * 2);
@@ -1129,7 +1284,11 @@ function desenharItemChao(item) {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(screenX - 4, screenY - 8, 8, 16, 4);
+    ctx.moveTo(screenX, screenY - 8);
+    ctx.lineTo(screenX + 8, screenY);
+    ctx.lineTo(screenX, screenY + 8);
+    ctx.lineTo(screenX - 8, screenY);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
   } else {
@@ -1439,7 +1598,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 }
 
 // ==========================================
-// MINIMAPA RADAR BIOLÓGICO
+// MINIMAPA RADAR DA PLATAFORMA
 // ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
@@ -1502,13 +1661,13 @@ function desenharMinimapa() {
     miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
   }
 
-  // Itens e Cápsulas de Soro no minimapa
+  // Peças da Nave e Suprimentos no minimapa
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     let mx = cx + (item.x - player.x) * scale;
     let my = cy + (item.y - player.y) * scale;
 
-    if (item.type === 'serum') {
+    if (item.type === 'ship_part') {
       mx = Math.max(8, Math.min(mw - 8, mx));
       my = Math.max(8, Math.min(mh - 8, my));
       miniCtx.fillStyle = '#00e5ff';
@@ -1535,13 +1694,18 @@ function desenharMinimapa() {
     miniCtx.fill();
   }
 
-  // Câmara de Regeneração no minimapa (Estrela Dourada)
-  let chX = cx + (regenerationChamber.x - player.x) * scale;
-  let chY = cy + (regenerationChamber.y - player.y) * scale;
-  chX = Math.max(8, Math.min(mw - 8, chX));
-  chY = Math.max(8, Math.min(mh - 8, chY));
-  miniCtx.fillStyle = contarCapsulasColetadas() >= 3 ? '#00ff88' : '#ffcc00';
-  miniCtx.fillRect(chX - 3.5, chY - 3.5, 7, 7);
+  // Nave Espacial no minimapa (Triângulo Dourado / Verde)
+  let shX = cx + (escapeShip.x + escapeShip.width / 2 - player.x) * scale;
+  let shY = cy + (escapeShip.y + escapeShip.height / 2 - player.y) * scale;
+  shX = Math.max(8, Math.min(mw - 8, shX));
+  shY = Math.max(8, Math.min(mh - 8, shY));
+  miniCtx.fillStyle = contarPecasColetadas() >= 3 ? '#00ff88' : '#ffcc00';
+  miniCtx.beginPath();
+  miniCtx.moveTo(shX, shY - 5);
+  miniCtx.lineTo(shX + 4.5, shY + 4);
+  miniCtx.lineTo(shX - 4.5, shY + 4);
+  miniCtx.closePath();
+  miniCtx.fill();
 
   const pulse = 2.5 + Math.sin(animFrame * 0.15) * 0.6;
   for (let z of zombies) {
@@ -1586,7 +1750,6 @@ function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  // A visão escurece levemente se o tempo de vida estiver muito baixo
   const outerRadius = lifeYears <= 10 ? 290 : 380;
 
   const gradient = ctx.createRadialGradient(screenPx, screenPy, 80, screenPx, screenPy, outerRadius);

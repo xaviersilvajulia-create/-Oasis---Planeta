@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SOBREVIVÊNCIA: TEMPO ESGOTANDO</title>
+  <title>FUGA DA TERRA: ÚLTIMA DECOLAGEM</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
 </head>
@@ -12,19 +12,19 @@
   <!-- TELA INICIAL -->
   <div id="login-screen" class="overlay-screen">
     <div class="login-box">
-      <h1 class="game-title">TEMPO ESGOTANDO</h1>
-      <p class="subtitle">A radiação reduziu a expectativa de vida humana para 35 anos. Recupere as 3 Cápsulas de Soro e ative a Câmara de Regeneração antes que seu tempo acabe.</p>
+      <h1 class="game-title">ÚLTIMA DECOLAGEM</h1>
+      <p class="subtitle">O ar tóxico da Terra reduziu a expectativa de vida para 35 anos. Recupere as 3 peças da nave e decole para a estação espacial antes que seu tempo acabe.</p>
       
       <div class="input-group">
-        <label for="player-name-input">NOME DO SOBREVIVENTE:</label>
+        <label for="player-name-input">NOME DA PILOTO:</label>
         <input type="text" id="player-name-input" placeholder="Digite seu codinome..." maxlength="15" />
       </div>
 
-      <button class="btn-start" onclick="iniciarJogo()">LUTAR PELO TEMPO</button>
+      <button class="btn-start" onclick="iniciarJogo()">INICIAR MISSÃO</button>
       
       <div class="controls-hint">
         <span>[W A S D] Mover</span>
-        <span>[E] Coletar / Conversar / Sintetizar</span>
+        <span>[E] Pegar Peça / Falar / Ligar Nave</span>
       </div>
     </div>
   </div>
@@ -32,8 +32,8 @@
   <!-- TELA DE GAME OVER -->
   <div id="game-over-screen" class="overlay-screen" style="display: none;">
     <div class="login-box" style="border-color: #ff0033; box-shadow: 0 0 40px rgba(255, 0, 51, 0.4);">
-      <h1 class="game-title" style="color: #ff0033;">SEU TEMPO ACABOU</h1>
-      <p class="subtitle">Seu relógio biológico chegou a zero antes de sintetizar a cura.</p>
+      <h1 class="game-title" style="color: #ff0033;">TEMPO ESGOTADO</h1>
+      <p class="subtitle">Você não conseguiu preparar a nave antes que seu relógio biológico chegasse a zero.</p>
       <button class="btn-start" style="background: #ff0033;" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
     </div>
   </div>
@@ -41,8 +41,8 @@
   <!-- TELA DE VITÓRIA -->
   <div id="victory-screen" class="overlay-screen" style="display: none;">
     <div class="login-box" style="border-color: #00ff88; box-shadow: 0 0 40px rgba(0, 255, 136, 0.4);">
-      <h1 class="game-title" style="color: #00ff88;">LONGEVIDADE RESTAURADA!</h1>
-      <p class="subtitle">Você sintetizou o Soro Genético a tempo! A expectativa de vida foi restaurada para 85 anos.</p>
+      <h1 class="game-title" style="color: #00ff88;">DECOLAGEM CONCLUÍDA!</h1>
+      <p class="subtitle">Você escapou da atmosfera tóxica da Terra rumo à Estação Orbital! Sua expectativa de vida foi restaurada.</p>
       <p id="victory-stats" style="color: #ffcc00; font-family: 'Press Start 2P', monospace; font-size: 11px; margin-bottom: 20px;"></p>
       <button class="btn-start" style="background: #00ff88; color: #05110a;" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
     </div>
@@ -55,7 +55,7 @@
     <!-- HUD SUPERIOR -->
     <div id="hud">
       <div class="hud-card">
-        <span class="hud-label">SOBREVIVENTE</span>
+        <span class="hud-label">PILOTO</span>
         <span id="display-player-name" class="hud-value">---</span>
       </div>
       <div class="hud-card">
@@ -63,27 +63,27 @@
         <span id="life-span" class="hud-value">35 Anos</span>
       </div>
       <div class="hud-card">
-        <span class="hud-label">SUPRIMENTOS</span>
+        <span class="hud-label">OXIGÊNIO / SUPR.</span>
         <span id="supplies-val" class="hud-value">70%</span>
       </div>
       <div class="hud-card" style="border-left-color: #00e5ff;">
-        <span class="hud-label">CÁPSULAS DE SORO</span>
-        <span id="capsules-val" class="hud-value" style="color: #00e5ff;">0/3</span>
+        <span class="hud-label">PEÇAS DA NAVE</span>
+        <span id="parts-val" class="hud-value" style="color: #00e5ff;">0/3</span>
       </div>
       <div id="status-safe" class="hud-card safe-badge" style="display: none;">
-        CÁPSULA DE ESTASE (TEMPO PAUSADO)
+        ABRIGO DE ESTASE (TEMPO PAUSADO)
       </div>
       <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
     </div>
 
     <!-- MINIMAPA NO CANTO SUPERIOR DIREITO -->
     <div id="minimap-container">
-      <div class="minimap-header">RADAR BIOLÓGICO</div>
+      <div class="minimap-header">RADAR DA PLATAFORMA</div>
       <canvas id="minimapCanvas" width="160" height="160"></canvas>
       <div class="minimap-legend">
         <span style="color:#ff69b4;">● Você</span>
-        <span style="color:#00e5ff;">◆ Soro</span>
-        <span style="color:#ffcc00;">★ Câmara</span>
+        <span style="color:#00e5ff;">◆ Peça</span>
+        <span style="color:#ffcc00;">▲ Nave</span>
         <span style="color:#ff0033;">● Zumbi</span>
       </div>
     </div>
@@ -91,9 +91,9 @@
     <!-- NOTIFICAÇÃO DE COLETA -->
     <div id="item-popup" style="display: none;"></div>
 
-    <!-- BARRA DE PROGRESSO DA CÂMARA DE REGENERAÇÃO -->
+    <!-- BARRA DE PROGRESSO DA DECOLAGEM -->
     <div id="tower-progress-box" style="display: none;">
-      <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #00ff88; margin-bottom: 8px;">SINTETIZANDO SORO GENÉTICO...</div>
+      <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ff9900; margin-bottom: 8px;">AQUECENDO PROPULSORES... (BARULHO ATRAINDO ZUMBIS!)</div>
       <div class="progress-bar-bg">
         <div id="tower-progress-fill"></div>
       </div>
