@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Último Respiro: Fuga da Terra</title>
+  <title>Último Respiro: Ecos da Terra</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -12,16 +12,16 @@
   <!-- TELA INICIAL -->
   <div id="login-screen">
     <div class="login-box">
-      <div class="badge-alert">ALERTA DE COLAPSO PLANETÁRIO</div>
+      <div class="badge-alert">TRANSMISSÃO INTERCEPTADA — SETOR 09</div>
       <h1>ÚLTIMO RESPIRO</h1>
-      <p class="subtitle">FUGA DA TERRA</p>
+      <p class="subtitle">ECOS DA TERRA</p>
       <p class="desc">
-        A radiação temporal consome seus anos de vida. Converse com os sobreviventes para localizar as <strong>3 peças da Nave Aurora</strong>, desvie dos monstros mutantes e escape antes que seja tarde.
+        O colapso do núcleo terrestre liberou uma radiação que acelera o envelhecimento e deformou os sobreviventes. Explore as ruínas, leia os diários abandonados, esconda-se das criaturas que caçam nas sombras e recupere as <strong>3 peças da Nave Aurora</strong>.
       </p>
       <input type="text" id="player-name-input" placeholder="Digite seu nome de sobrevivente..." maxlength="16">
-      <button class="btn-start" onclick="iniciarJogo()">INICIAR MISSÃO</button>
+      <button class="btn-start" onclick="iniciarJogo()">ENTRAR NAS RUÍNAS</button>
       <div class="controls-preview">
-        <span>[WASD] Mover</span> • <span>[SHIFT] Correr</span> • <span>[F] Lanterna</span> • <span>[Q] Sinalizador</span> • <span>[E] Interagir</span>
+        <span>[WASD] Mover</span> • <span>[SHIFT] Correr</span> • <span>[F] Lanterna</span> • <span>[C] Esconder</span> • <span>[Q] Sinalizador</span> • <span>[E] Interagir</span>
       </div>
     </div>
   </div>
@@ -30,18 +30,23 @@
   <div id="game-ui" style="display: none;">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- OVERLAY DA CENA DE INTRODUÇÃO (10 SEGUNDOS) -->
+    <!-- OVERLAY DA CENA DE INTRODUÇÃO COM NARRAÇÃO -->
     <div id="intro-overlay" style="display: none;">
       <div class="intro-radio-box">
         <div class="radio-header">
-          <span class="rec-dot"></span> TRANSMISSÃO DE EMERGÊNCIA — COMPUTADOR DE BORDO AURORA
+          <span class="rec-dot"></span> REGISTRO DE BORDO — VOZ DO SISTEMA AURORA
         </div>
-        <p id="intro-subtitle">Iniciando sequência de pouso forçado...</p>
+        <p id="intro-subtitle">Iniciando transmissão de emergência...</p>
         <div class="intro-footer">
           <span id="intro-timer">10s</span>
-          <button class="btn-skip" onclick="pularIntroducao()">Pular Cena [ENTER]</button>
+          <button class="btn-skip" onclick="pularIntroducao()">Pular Narração [ENTER]</button>
         </div>
       </div>
+    </div>
+
+    <!-- INDICADOR DE FURTIVIDADE / ESCONDIDO -->
+    <div id="stealth-banner" style="display: none;">
+      OCULTO NAS SOMBRAS — DESLIGUE A LANTERNA [F] PARA NÃO SER VISTO
     </div>
 
     <!-- HUD SUPERIOR ESQUERDO -->
@@ -70,6 +75,12 @@
           <span id="stamina-text" class="stat-val">100%</span>
         </div>
 
+        <div class="stat-row">
+          <span class="stat-label">BATERIA</span>
+          <div class="bar-bg"><div id="battery-bar" class="bar-fill" style="width: 100%; background: #facc15;"></div></div>
+          <span id="battery-text" class="stat-val">100%</span>
+        </div>
+
         <div id="status-slow" class="badge-slow" style="display: none;">EXAUSTO (VELOCIDADE REDUZIDA)</div>
       </div>
 
@@ -86,6 +97,10 @@
           <span>LANTERNA [F]:</span>
           <strong id="flashlight-val" style="color: #38bdf8;">LIGADA</strong>
         </div>
+        <div class="mission-row">
+          <span>DIÁRIOS LIDOS:</span>
+          <strong id="notes-val">0/4</strong>
+        </div>
       </div>
     </div>
 
@@ -94,7 +109,7 @@
       <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
       <div class="radar-frame">
         <canvas id="minimapCanvas" width="145" height="145"></canvas>
-        <div class="radar-label">RADAR TÁTICO</div>
+        <div class="radar-label">SONAR TÁTICO</div>
       </div>
     </div>
 
@@ -112,6 +127,15 @@
     <!-- POPUP DE NOTIFICAÇÃO -->
     <div id="item-popup" style="display: none;"></div>
 
+    <!-- LEITOR DE DIÁRIO ABANDONADO -->
+    <div id="note-modal" style="display: none;">
+      <div class="note-paper">
+        <div class="note-header" id="note-title">DIÁRIO ENCONTRADO</div>
+        <p id="note-body"></p>
+        <button class="btn-oasis" onclick="fecharNota()">Guardar Registro [E / ESC]</button>
+      </div>
+    </div>
+
     <!-- CAIXA DE DIÁLOGO COM NPC -->
     <div id="dialog-box" style="display: none;">
       <div id="npc-name">Sobrevivente</div>
@@ -122,8 +146,8 @@
     <!-- TELA DE GAME OVER -->
     <div id="game-over-screen" class="end-screen" style="display: none;">
       <div class="end-box gameover">
-        <h2>SEU TEMPO ACABOU</h2>
-        <p>A radiação e os monstros da Terra consumiram seus últimos anos de vida.</p>
+        <h2>VOCÊ NÃO RESISTIU</h2>
+        <p>As sombras e a radiação da Terra consumiram seus últimos anos de vida.</p>
         <button class="btn-start" onclick="reiniciarJogo()">TENTAR NOVAMENTE</button>
       </div>
     </div>
@@ -132,7 +156,7 @@
     <div id="victory-screen" class="end-screen" style="display: none;">
       <div class="end-box victory">
         <h2>FUGA CONCLUÍDA!</h2>
-        <p>Você reparou a Cápsula Orbital Aurora e escapou do colapso da Terra.</p>
+        <p>Você reparou a Cápsula Orbital Aurora e deixou a Terra devastada para trás.</p>
         <p id="victory-stats" class="stats-highlight"></p>
         <button class="btn-start" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
       </div>

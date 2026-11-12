@@ -4,40 +4,72 @@ let lifeYears = 35;
 let hunger = 100;
 let thirst = 100;
 let stamina = 100;
+let battery = 100;
 let flaresCount = 2;
 let flashlightOn = true;
+let isHiding = false;
+let currentHideSpot = null;
 
 let activeNPC = null;
 let activeItem = null;
+let activeNote = null;
+let activeHideSpot = null;
 let activeShip = null;
 let inDialog = false;
+let readingNote = false;
+
 let animFrame = 0;
 let agingTimer = 0;
 let hungerThirstTimer = 0;
 let flashDamage = 0;
 let screenShake = 0;
+let lightningAlpha = 0;
+let lightningTimer = 0;
+
 let isGameOver = false;
 let isVictory = false;
 let isLaunching = false;
 let playerBoardedShip = false;
 let shipLiftOffset = 0;
+
 let liftParticles = [];
-let acidProjectiles = [];
-let acidPuddles = [];
 let activeFlares = [];
 let footprints = [];
 let ashParticles = [];
+let soundWaves = [];
+let groundDetails = [];
 
 // ==========================================
-// CONTROLE DA CENA DE INTRODUÇÃO (10 SEGUNDOS)
+// CENA DE INTRODUÇÃO COM NARRAÇÃO DE VOZ
 // ==========================================
 let inIntro = false;
 let introTimer = 0;
-const INTRO_DURATION = 600; // 10 segundos a 60 FPS
-let introShipAltitude = 360;
+const INTRO_DURATION = 630; // ~10.5 segundos a 60 FPS
+let introShipAltitude = 380;
+
+const INTRO_NARRATION_TEXT =
+  "Ano 2089. O colapso do núcleo terrestre liberou uma radiação silenciosa que consome os anos de vida humana e deformou aqueles que ficaram para trás. " +
+  "Durante o pouso forçado da Cápsula Aurora, os três módulos principais se perderam nas ruínas. " +
+  "Explore as casas abandonadas, use as sombras para se esconder das criaturas que caçam de quatro patas, e recupere as peças antes que seu tempo acabe.";
+
+function falarNarracaoIntro() {
+  if (!audioEnabled || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+
+  const utter = new SpeechSynthesisUtterance(INTRO_NARRATION_TEXT);
+  utter.lang = 'pt-BR';
+  utter.rate = 1.04;
+  utter.pitch = 0.85; // Tom mais grave e cinematográfico
+
+  const voices = window.speechSynthesis.getVoices();
+  const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt'));
+  if (ptVoice) utter.voice = ptVoice;
+
+  window.speechSynthesis.speak(utter);
+}
 
 // ==========================================
-// SISTEMA DE ÁUDIO E TRILHA DE TENSÃO (WEB AUDIO API)
+// SISTEMA DE ÁUDIO E PAISAGEM SONORA (WEB AUDIO API)
 // ==========================================
 let audioCtx = null;
 let audioEnabled = true;
@@ -82,16 +114,16 @@ function iniciarAudio() {
   droneGain = audioCtx.createGain();
 
   droneOsc1.type = 'sawtooth';
-  droneOsc1.frequency.value = 110;
+  droneOsc1.frequency.value = 98;
 
   droneOsc2.type = 'triangle';
-  droneOsc2.frequency.value = 111.8;
+  droneOsc2.frequency.value = 100.5;
 
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.value = 320;
+  filter.frequency.value = 280;
 
-  droneGain.gain.value = 0.14;
+  droneGain.gain.value = 0.13;
 
   droneOsc1.connect(filter);
   droneOsc2.connect(filter);
@@ -101,6 +133,31 @@ function iniciarAudio() {
   droneOsc1.start();
   droneOsc2.start();
 
+  // Vento sombrio contínuo (ruído filtrado)
+  const bufferSize = audioCtx.sampleRate * 2;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    output[i] = Math.random() * 2 - 1;
+  }
+  const windSource = audioCtx.createBufferSource();
+  windSource.buffer = noiseBuffer;
+  windSource.loop = true;
+
+  const windFilter = audioCtx.createBiquadFilter();
+  windFilter.type = 'bandpass';
+  windFilter.frequency.value = 340;
+  windFilter.Q.value = 2.5;
+
+  const windGain = audioCtx.createGain();
+  windGain.gain.value = 0.05;
+
+  windSource.connect(windFilter);
+  windFilter.connect(windGain);
+  windGain.connect(masterGain);
+  windSource.start();
+
+  // Motor da nave
   engineOsc = audioCtx.createOscillator();
   engineGain = audioCtx.createGain();
   const engineFilter = audioCtx.createBiquadFilter();
@@ -123,6 +180,10 @@ function alternarAudio() {
   const btn = document.getElementById('audio-toggle');
   if (btn) btn.innerText = audioEnabled ? 'SOM: ON' : 'SOM: OFF';
 
+  if (!audioEnabled && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
   if (masterGain && audioCtx) {
     masterGain.gain.setTargetAtTime(audioEnabled ? 0.85 : 0, audioCtx.currentTime, 0.05);
   }
@@ -132,7 +193,7 @@ function atualizarMusicaDeTensao() {
   if (!audioEnabled || !audioCtx || !masterGain) return;
   if (audioCtx.state === 'suspended') return;
 
-  const ritmo = (isBeingChased || isLaunching) ? 24 : (lifeYears <= 12 ? 32 : 48);
+  const ritmo = (isBeingChased || isLaunching) ? 24 : (lifeYears <= 12 ? 32 : 52);
   tensionMusicTimer++;
 
   if (tensionMusicTimer >= ritmo) {
@@ -153,9 +214,9 @@ function atualizarMusicaDeTensao() {
     subOsc.frequency.setValueAtTime(freq * 2, now);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(isBeingChased ? 750 : 420, now);
+    filter.frequency.setValueAtTime(isBeingChased ? 720 : 380, now);
 
-    const vol = isBeingChased ? 0.16 : 0.10;
+    const vol = isBeingChased ? 0.15 : 0.09;
     noteGain.gain.setValueAtTime(0.001, now);
     noteGain.gain.linearRampToValueAtTime(vol, now + 0.04);
     noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
@@ -201,8 +262,8 @@ function tocarEfeitoSonoro(tipo) {
 
   if (tipo === 'step') {
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(220 + Math.random() * 40, now);
-    osc.frequency.exponentialRampToValueAtTime(110, now + 0.055);
+    osc.frequency.setValueAtTime(210 + Math.random() * 40, now);
+    osc.frequency.exponentialRampToValueAtTime(95, now + 0.055);
     gain.gain.setValueAtTime(0.11, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     osc.start(now);
@@ -210,47 +271,54 @@ function tocarEfeitoSonoro(tipo) {
   } else if (tipo === 'heartbeat') {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(135, now);
-    osc.frequency.exponentialRampToValueAtTime(65, now + 0.2);
-    gain.gain.setValueAtTime(0.34, now);
+    osc.frequency.exponentialRampToValueAtTime(62, now + 0.2);
+    gain.gain.setValueAtTime(0.35, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.start(now);
     osc.stop(now + 0.22);
-  } else if (tipo === 'brute_roar') {
-    // Rugido grave e pesado do Brutamonte
+  } else if (tipo === 'zombie_groan') {
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(115, now);
-    osc.frequency.exponentialRampToValueAtTime(42, now + 0.55);
-    gain.gain.setValueAtTime(0.32, now);
+    osc.frequency.setValueAtTime(95 + Math.random() * 20, now);
+    osc.frequency.linearRampToValueAtTime(68, now + 0.45);
+    gain.gain.setValueAtTime(0.13, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+    osc.start(now);
+    osc.stop(now + 0.48);
+  } else if (tipo === 'quad_shriek') {
+    // Som assustador do monstro quadrúpede detectando presa
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(860, now + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.55);
+    gain.gain.setValueAtTime(0.28, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
     osc.start(now);
     osc.stop(now + 0.58);
-  } else if (tipo === 'brute_step') {
+  } else if (tipo === 'quad_gallop') {
+    // Patas batendo rápido no chão
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(85, now);
-    osc.frequency.exponentialRampToValueAtTime(36, now + 0.15);
-    gain.gain.setValueAtTime(0.24, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.frequency.setValueAtTime(125, now);
+    osc.frequency.exponentialRampToValueAtTime(48, now + 0.09);
+    gain.gain.setValueAtTime(0.20, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
     osc.start(now);
-    osc.stop(now + 0.16);
-  } else if (tipo === 'stalker_screech') {
-    // Guincho agudo do Perseguidor
+    osc.stop(now + 0.1);
+  } else if (tipo === 'thunder') {
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(580, now);
-    osc.frequency.exponentialRampToValueAtTime(920, now + 0.12);
-    osc.frequency.exponentialRampToValueAtTime(310, now + 0.34);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    osc.frequency.setValueAtTime(95, now);
+    osc.frequency.exponentialRampToValueAtTime(34, now + 1.1);
+    gain.gain.setValueAtTime(0.26, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
     osc.start(now);
-    osc.stop(now + 0.36);
-  } else if (tipo === 'acid_spit') {
-    // Chiado borbulhante do Cuspidor Ácido
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(640, now);
-    osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.stop(now + 1.15);
+  } else if (tipo === 'hide') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.14);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     osc.start(now);
-    osc.stop(now + 0.24);
+    osc.stop(now + 0.15);
   } else if (tipo === 'flare') {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(420, now);
@@ -266,14 +334,6 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     osc.start(now);
     osc.stop(now + 0.05);
-  } else if (tipo === 'radio_beep') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(960, now);
-    osc.frequency.setValueAtTime(1240, now + 0.06);
-    gain.gain.setValueAtTime(0.14, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-    osc.start(now);
-    osc.stop(now + 0.14);
   } else if (tipo === 'crash_land') {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(140, now);
@@ -352,8 +412,8 @@ const player = {
   y: 900,
   width: 26,
   height: 40,
-  baseSpeed: 3.4,
-  speed: 3.4,
+  baseSpeed: 3.3,
+  speed: 3.3,
   skinColor: '#ffdbac',
   shirtColor: '#2563eb',
   pantsColor: '#28362b',
@@ -377,22 +437,50 @@ const escapeShip = {
   name: "Cápsula Orbital Aurora"
 };
 
+// Construções principais + Casas abandonadas destruídas
 const buildings = [
   {
-    x: 240, y: 1460, w: 185, h: 160,
-    doorSide: 'bottom', doorPos: 65, doorWidth: 42,
-    type: 'clinic', title: 'POSTO MÉDICO', onFire: true
+    x: 240, y: 1460, w: 195, h: 165,
+    doorSide: 'bottom', doorPos: 65, doorWidth: 44,
+    type: 'clinic', title: 'POSTO MÉDICO EM RUÍNAS', onFire: true, ruinedLevel: 2
   },
   {
-    x: 1640, y: 1960, w: 195, h: 165,
-    doorSide: 'top', doorPos: 68, doorWidth: 44,
-    type: 'warehouse', title: 'DEPÓSITO SUL', onFire: true
+    x: 1640, y: 1960, w: 205, h: 170,
+    doorSide: 'top', doorPos: 68, doorWidth: 46,
+    type: 'warehouse', title: 'DEPÓSITO SUL DESTRUÍDO', onFire: true, ruinedLevel: 3
   },
   {
-    x: 2380, y: 680, w: 190, h: 160,
-    doorSide: 'left', doorPos: 52, doorWidth: 42,
-    type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true
+    x: 2380, y: 680, w: 195, h: 165,
+    doorSide: 'left', doorPos: 52, doorWidth: 44,
+    type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true, ruinedLevel: 2
+  },
+  // Casas abandonadas para explorar e ler diários
+  {
+    x: 920, y: 1180, w: 155, h: 135,
+    doorSide: 'top', doorPos: 55, doorWidth: 40,
+    type: 'house', title: 'CASA ABANDONADA #01', onFire: false, ruinedLevel: 3
+  },
+  {
+    x: 1540, y: 1120, w: 160, h: 140,
+    doorSide: 'left', doorPos: 48, doorWidth: 40,
+    type: 'house', title: 'RESIDÊNCIA COLAPSADA #02', onFire: true, ruinedLevel: 3
+  },
+  {
+    x: 1080, y: 1680, w: 165, h: 140,
+    doorSide: 'right', doorPos: 50, doorWidth: 40,
+    type: 'house', title: 'ABRIGO FAMILIAR #03', onFire: false, ruinedLevel: 2
   }
+];
+
+// Esconderijos (Armários metálicos nas casas e escombros na rua)
+const hidingSpots = [
+  { x: 942, y: 1205, w: 28, h: 36, type: 'locker', label: 'Armário Metálico' },
+  { x: 1655, y: 1140, w: 28, h: 36, type: 'locker', label: 'Armário Enferrujado' },
+  { x: 1102, y: 1705, w: 28, h: 36, type: 'locker', label: 'Armário de Suprimentos' },
+  { x: 265, y: 1560, w: 28, h: 36, type: 'locker', label: 'Armário Hospitalar' },
+  { x: 1665, y: 2070, w: 28, h: 36, type: 'locker', label: 'Contêiner Aberto' },
+  { x: 1420, y: 940, w: 46, h: 30, type: 'rubble', label: 'Escombros de Concreto' },
+  { x: 1980, y: 820, w: 46, h: 30, type: 'rubble', label: 'Pilha de Destroços' }
 ];
 
 const wreckedCars = [
@@ -401,8 +489,32 @@ const wreckedCars = [
   { x: 1780, y: 860, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
+// Diários de sobreviventes dentro das casas
+const loreNotes = [
+  {
+    id: 1, x: 1020, y: 1275, read: false,
+    title: 'DIÁRIO DE CLARA — DIA 03 DO COLAPSO',
+    text: '"O céu ficou laranja na terça-feira. Meu marido notou que os cabelos dele ficaram brancos em poucas horas. A radiação do núcleo está roubando décadas da nossa vida a cada dia..."'
+  },
+  {
+    id: 2, x: 1640, y: 1215, read: false,
+    title: 'GRAVAÇÃO DO VIGIA — SETOR LESTE',
+    text: '"Não corram perto das ruínas! Aquelas coisas que andam de quatro patas são cegas no escuro se você apagar a lanterna, mas ouvem qualquer passo apressado a dezenas de metros."'
+  },
+  {
+    id: 3, x: 1185, y: 1765, read: false,
+    title: 'BILHETE DE DESPEDIDA',
+    text: '"Deixei pilhas e comida no armário para quem vier depois. Ouvi dizer que engenheiros da nave Aurora estão reunindo peças ao sul e ao leste. Que Deus nos ajude."'
+  },
+  {
+    id: 4, x: 2490, y: 740, read: false,
+    title: 'RELATÓRIO CIENTÍFICO — LAB 04',
+    text: '"A mutação quadrúpede apresenta estrutura óssea alongada e extrema velocidade. A luz intensa de sinalizadores térmicos sobrecarrega seus sentidos por alguns segundos."'
+  }
+];
+
 const itemsOnGround = [
-  { id: 101, x: 268, y: 1495, type: 'ship_part', partShape: 'suit', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
+  { id: 101, x: 275, y: 1495, type: 'ship_part', partShape: 'suit', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
   { id: 102, x: 2535, y: 805, type: 'ship_part', partShape: 'chip', label: 'Chip de Navegação', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
   { id: 103, x: 1800, y: 2090, type: 'ship_part', partShape: 'fuel', label: 'Núcleo de Combustível', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
 
@@ -414,9 +526,14 @@ const itemsOnGround = [
   { id: 5, x: 1660, y: 1420, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
   { id: 6, x: 2020, y: 980, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false },
 
-  // Sinalizadores extras pelo mapa
-  { id: 7, x: 1020, y: 1260, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, hunger: 0, thirst: 0, collected: false },
-  { id: 8, x: 1750, y: 1180, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, hunger: 0, thirst: 0, collected: false }
+  // Pilhas para a lanterna
+  { id: 9, x: 965, y: 1270, type: 'battery', label: 'Pilhas Alcalinas (+60% Bateria)', years: 1, battery: 60, collected: false },
+  { id: 10, x: 1580, y: 1185, type: 'battery', label: 'Bateria de Lítio (+70% Bateria)', years: 1, battery: 70, collected: false },
+  { id: 11, x: 1130, y: 1730, type: 'battery', label: 'Pilhas Alcalinas (+60% Bateria)', years: 1, battery: 60, collected: false },
+
+  // Sinalizadores extras
+  { id: 7, x: 1020, y: 1220, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, collected: false },
+  { id: 8, x: 1750, y: 1380, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, collected: false }
 ];
 
 const npcs = [
@@ -437,25 +554,25 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Use [Q] para jogar sinalizadores e distrair os monstros! Eu sei onde esconderam o Combustível e o Chip da nave Aurora. Qual pista você precisa?",
+    dialog: "Shhh! Fale baixo... há criaturas quadrúpedes caçando nessa área. Se ouvir passos rápidos, entre num armário com [C] e apague a lanterna! Qual pista da nave você precisa?",
     options: [
       {
         text: "Onde posso achar o Galão de Combustível?",
         years: 2, hunger: 0, thirst: 0,
         revealPartId: 103,
-        resp: "DICA DO MARCUS: Siga bem para o SUL até o DEPÓSITO SUL (cuidado com o Brutamonte!). O galão vermelho de combustível está no canto interno direito. Marquei no radar!"
+        resp: "DICA DO MARCUS: Siga para o SUL até o DEPÓSITO SUL DESTRUÍDO. O galão vermelho está no fundo. Marquei no sonar!"
       },
       {
         text: "Onde está o Chip de Navegação?",
         years: 2, hunger: 0, thirst: 0,
         revealPartId: 102,
-        resp: "DICA DO MARCUS: Vá direto para o LESTE até o LABORATÓRIO LESTE. Entre pela porta esquerda e procure no fundo da sala! Marquei no radar."
+        resp: "DICA DO MARCUS: Vá para o LESTE até o LABORATÓRIO LESTE. Cuidado no caminho aberto! Marquei a posição no sonar."
       },
       {
         text: "Preciso de água e comida para a busca.",
         years: 2, hunger: 35, thirst: 35,
         revealPartId: null,
-        resp: "Tome aqui! Se precisar das dicas de onde estão as peças, pode falar comigo de novo."
+        resp: "Tome aqui! Vasculhe também as casas abandonadas para achar pilhas e diários."
       }
     ],
     solved: false
@@ -477,25 +594,25 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Os monstros estão rondando as ruínas! Eu vi onde guardaram o Traje Criogênico e também sei onde está o Combustível.",
+    dialog: "Aqueles monstros de quatro patas reagem ao som de corrida e à luz. Eu vi onde guardaram o Traje Criogênico e o Combustível.",
     options: [
       {
         text: "Onde posso encontrar o Traje Criogênico?",
         years: 3, hunger: 0, thirst: 0,
         revealPartId: 101,
-        resp: "DICA DA ELENA: Siga mais para SUDOESTE até o POSTO MÉDICO. Entre pela porta de baixo e olhe no canto superior esquerdo! Marquei no radar."
+        resp: "DICA DA ELENA: Siga para SUDOESTE até o POSTO MÉDICO EM RUÍNAS. Entre pela porta de baixo e olhe no canto superior esquerdo!"
       },
       {
         text: "Você sabe onde fica o Combustível?",
         years: 2, hunger: 0, thirst: 0,
         revealPartId: 103,
-        resp: "DICA DA ELENA: O galão de combustível foi levado para o DEPÓSITO SUL, bem longe ao sudeste da nave! Marquei a direção no seu radar."
+        resp: "DICA DA ELENA: O galão de combustível está no DEPÓSITO SUL, ao sudeste da nave! Marquei no seu sonar."
       },
       {
-        text: "Aplicar soro hidratante para correr mais rápido.",
+        text: "Aplicar soro hidratante.",
         years: 3, hunger: 20, thirst: 45,
         revealPartId: null,
-        resp: "Hidratação restaurada! Fale comigo novamente se quiser dicas da localização das peças."
+        resp: "Hidratação restaurada! Fale comigo novamente se precisar das coordenadas."
       }
     ],
     solved: false
@@ -503,79 +620,36 @@ const npcs = [
 ];
 
 const zombies = [
-  { x: 1650, y: 880, width: 26, height: 40, speed: 1.05, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 820, y: 1120, width: 26, height: 40, speed: 0.98, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1450, y: 1660, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 480, y: 1180, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 2060, y: 840, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+  { x: 1650, y: 880, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false, groanTimer: 120 },
+  { x: 820, y: 1120, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false, groanTimer: 240 },
+  { x: 1450, y: 1660, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false, groanTimer: 180 },
+  { x: 480, y: 1180, width: 26, height: 40, speed: 0.92, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false, groanTimer: 300 },
+  { x: 2060, y: 840, width: 26, height: 40, speed: 1.05, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false, groanTimer: 90 }
 ];
 
-const monsters = [
+// APENAS 2 MONSTROS QUADRÚPEDES RAROS E ASSUSTADORES
+const quadrupedMonsters = [
   {
-    name: 'Brutamonte',
-    kind: 'brute',
-    x: 1580, y: 1850,
-    width: 38, height: 52,
-    speed: 0.85,
+    name: 'Rastejador Noturno',
+    x: 2080, y: 860,
+    width: 48, height: 30,
+    speed: 2.35,
     damage: 4,
-    detectRadius: 430,
+    detectRadius: 460,
     vx: 0, vy: 0, facing: -1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
+    patrolTimer: 0, isMoving: false, wasChasing: false,
+    investigateX: null, investigateY: null, investigateTimer: 0
   },
   {
-    name: 'Brutamonte',
-    kind: 'brute',
-    x: 340, y: 1650,
-    width: 38, height: 52,
-    speed: 0.85,
+    name: 'Predador das Cinzas',
+    x: 1380, y: 1780,
+    width: 48, height: 30,
+    speed: 2.35,
     damage: 4,
-    detectRadius: 430,
+    detectRadius: 460,
     vx: 0, vy: 0, facing: 1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
-  },
-  {
-    name: 'Perseguidor',
-    kind: 'stalker',
-    x: 2180, y: 760,
-    width: 30, height: 44,
-    speed: 1.88,
-    damage: 3,
-    detectRadius: 540,
-    vx: 0, vy: 0, facing: -1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
-  },
-  {
-    name: 'Perseguidor',
-    kind: 'stalker',
-    x: 960, y: 1380,
-    width: 30, height: 44,
-    speed: 1.85,
-    damage: 3,
-    detectRadius: 520,
-    vx: 0, vy: 0, facing: 1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 0
-  },
-  {
-    name: 'Cuspidor Ácido',
-    kind: 'spitter',
-    x: 1480, y: 1120,
-    width: 30, height: 44,
-    speed: 0.95,
-    damage: 2,
-    detectRadius: 490,
-    vx: 0, vy: 0, facing: -1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 90
-  },
-  {
-    name: 'Cuspidor Ácido',
-    kind: 'spitter',
-    x: 1920, y: 1480,
-    width: 30, height: 44,
-    speed: 0.95,
-    damage: 2,
-    detectRadius: 490,
-    vx: 0, vy: 0, facing: 1,
-    patrolTimer: 0, isMoving: false, wasChasing: false, attackCooldown: 90
+    patrolTimer: 0, isMoving: false, wasChasing: false,
+    investigateX: null, investigateY: null, investigateTimer: 0
   }
 ];
 
@@ -584,7 +658,7 @@ function redimensionarCanvas() {
   canvas.height = window.innerHeight;
 }
 
-function inicializarParticulasCinzas() {
+function inicializarAmbiente() {
   ashParticles = [];
   for (let i = 0; i < 65; i++) {
     ashParticles.push({
@@ -593,7 +667,18 @@ function inicializarParticulasCinzas() {
       vx: -0.4 - Math.random() * 0.7,
       vy: 0.3 + Math.random() * 0.6,
       size: 1.5 + Math.random() * 2.5,
-      isEmber: Math.random() > 0.75
+      isEmber: Math.random() > 0.78
+    });
+  }
+
+  // Rachaduras e detalhes realistas no solo
+  groundDetails = [];
+  for (let i = 0; i < 90; i++) {
+    groundDetails.push({
+      x: 150 + Math.random() * 2600,
+      y: 450 + Math.random() * 1900,
+      r: 8 + Math.random() * 22,
+      type: Math.random() > 0.4 ? 'crater' : 'crack'
     });
   }
 }
@@ -601,15 +686,18 @@ function inicializarParticulasCinzas() {
 function iniciarCenaIntroducao() {
   inIntro = true;
   introTimer = 0;
-  introShipAltitude = 360;
+  introShipAltitude = 380;
   document.getElementById('intro-overlay').style.display = 'flex';
-  tocarEfeitoSonoro('radio_beep');
+  falarNarracaoIntro();
 }
 
 function pularIntroducao() {
   if (!inIntro) return;
   inIntro = false;
   introShipAltitude = 0;
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
   document.getElementById('intro-overlay').style.display = 'none';
 }
 
@@ -621,21 +709,15 @@ function atualizarCenaIntroducao() {
   const sub = document.getElementById('intro-subtitle');
 
   if (introTimer === 1) {
-    sub.innerText = "ALERTA CRÍTICO: Órbita terrestre em colapso. Cápsula Aurora sofrendo falha nos propulsores!";
-  } else if (introTimer === 180) {
-    tocarEfeitoSonoro('radio_beep');
-    sub.innerText = "IMPACTO DETECTADO! As 3 peças essenciais da nave se soltaram e caíram nas construções próximas.";
-  } else if (introTimer === 360) {
-    tocarEfeitoSonoro('radio_beep');
-    sub.innerText = "ATENÇÃO: A radiação temporal está consumindo seus anos de vida e mutantes cercam a região.";
-  } else if (introTimer === 480) {
-    tocarEfeitoSonoro('radio_beep');
-    sub.innerText = "Fale com os sobreviventes para localizar as peças, use [F] para a lanterna e [Q] para sinalizadores!";
+    sub.innerText = "Ano 2089. O colapso do núcleo terrestre liberou uma radiação que consome os anos de vida humana...";
+  } else if (introTimer === 190) {
+    sub.innerText = "...e deformou aqueles que ficaram para trás. Durante o pouso forçado da Cápsula Aurora, 3 módulos se perderam.";
+  } else if (introTimer === 390) {
+    sub.innerText = "Explore as casas destruídas, use [C] para se esconder das criaturas de quatro patas e apague a lanterna [F] no escuro.";
   }
 
-  // Descida da nave nos primeiros 3.5 segundos
   if (introShipAltitude > 0) {
-    introShipAltitude = Math.max(0, introShipAltitude - 1.8);
+    introShipAltitude = Math.max(0, introShipAltitude - 1.85);
     liftParticles.push({
       x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 40,
       y: escapeShip.y + escapeShip.height - introShipAltitude + 6,
@@ -645,7 +727,7 @@ function atualizarCenaIntroducao() {
       size: 9 + Math.random() * 12
     });
     if (introShipAltitude === 0) {
-      screenShake = 18;
+      screenShake = 20;
       tocarEfeitoSonoro('crash_land');
     }
   }
@@ -657,7 +739,6 @@ function atualizarCenaIntroducao() {
   }
   liftParticles = liftParticles.filter(p => p.life > 0);
 
-  // Câmera focada na nave durante a introdução
   camera.x = (escapeShip.x + escapeShip.width / 2) - canvas.width / 2;
   camera.y = (escapeShip.y + escapeShip.height / 2 + 40) - canvas.height / 2;
 
@@ -666,23 +747,64 @@ function atualizarCenaIntroducao() {
   }
 }
 
+function emitirOndaSonora(x, y, maxRadius) {
+  soundWaves.push({ x, y, radius: 8, maxRadius, alpha: 0.65 });
+
+  // Alerta monstros quadrúpedes se o som alcançar eles
+  for (let m of quadrupedMonsters) {
+    const dist = Math.hypot((m.x + m.width / 2) - x, (m.y + m.height / 2) - y);
+    if (dist <= maxRadius) {
+      m.investigateX = x;
+      m.investigateY = y;
+      m.investigateTimer = 240;
+    }
+  }
+}
+
+function alternarEsconderijo() {
+  if (inIntro || inDialog || readingNote || isGameOver || isVictory || playerBoardedShip) return;
+
+  if (isHiding) {
+    isHiding = false;
+    currentHideSpot = null;
+    document.getElementById('stealth-banner').style.display = 'none';
+    tocarEfeitoSonoro('hide');
+    return;
+  }
+
+  if (activeHideSpot) {
+    isHiding = true;
+    currentHideSpot = activeHideSpot;
+    player.x = activeHideSpot.x + activeHideSpot.w / 2 - player.width / 2;
+    player.y = activeHideSpot.y + activeHideSpot.h / 2 - player.height / 2;
+    document.getElementById('stealth-banner').style.display = 'block';
+    tocarEfeitoSonoro('hide');
+  }
+}
+
 function lancarSinalizador() {
-  if (flaresCount <= 0 || inIntro || inDialog || isGameOver || isVictory || playerBoardedShip) return;
+  if (flaresCount <= 0 || inIntro || inDialog || readingNote || isGameOver || isVictory || playerBoardedShip) return;
+  if (isHiding) alternarEsconderijo();
+
   flaresCount--;
   document.getElementById('flares-val').innerText = flaresCount;
 
-  activeFlares.push({
-    x: player.x + player.width / 2 + player.facing * 18,
-    y: player.y + player.height - 6,
-    life: 420 // 7 segundos atraindo monstros e zumbis
-  });
+  const fx = player.x + player.width / 2 + player.facing * 18;
+  const fy = player.y + player.height - 6;
 
+  activeFlares.push({ x: fx, y: fy, life: 450 });
+  emitirOndaSonora(fx, fy, 420);
   tocarEfeitoSonoro('flare');
-  mostrarPopupItem('SINALIZADOR LANÇADO! Monstros atraídos pela luz.');
+  mostrarPopupItem('SINALIZADOR LANÇADO! Criaturas atraídas.');
 }
 
 function alternarLanterna() {
-  if (inIntro || inDialog || isGameOver || isVictory) return;
+  if (inIntro || inDialog || readingNote || isGameOver || isVictory) return;
+  if (battery <= 0) {
+    flashlightOn = false;
+    mostrarPopupItem('BATERIA DA LANTERNA ESGOTADA! Procure pilhas nas casas.');
+    return;
+  }
   flashlightOn = !flashlightOn;
   const el = document.getElementById('flashlight-val');
   el.innerText = flashlightOn ? 'LIGADA' : 'DESLIGADA';
@@ -708,7 +830,7 @@ function iniciarJogo() {
   window.addEventListener('resize', redimensionarCanvas);
 
   iniciarAudio();
-  inicializarParticulasCinzas();
+  inicializarAmbiente();
   iniciarCenaIntroducao();
 
   window.addEventListener('pointerdown', garantirAudioAtivo);
@@ -725,12 +847,27 @@ function iniciarJogo() {
 
     if (inIntro) return;
 
+    if (readingNote && (k === 'e' || k === 'escape' || k === ' ')) {
+      fecharNota();
+      return;
+    }
+
     if (k === 'f') alternarLanterna();
     if (k === 'q') lancarSinalizador();
+    if (k === 'c') alternarEsconderijo();
 
-    if (['e', ' '].includes(k) && !inDialog && !isGameOver && !isVictory && !playerBoardedShip) {
-      if (activeNPC) abrirDialogo(activeNPC);
-      else if (activeItem) coletarItem(activeItem);
+    if (['e', ' '].includes(k) && !inDialog && !readingNote && !isGameOver && !isVictory && !playerBoardedShip) {
+      if (isHiding) {
+        alternarEsconderijo();
+      } else if (activeNPC) {
+        abrirDialogo(activeNPC);
+      } else if (activeItem) {
+        coletarItem(activeItem);
+      } else if (activeNote) {
+        abrirNota(activeNote);
+      } else if (activeHideSpot) {
+        alternarEsconderijo();
+      }
     }
   });
 
@@ -745,8 +882,11 @@ function reiniciarJogo() {
   hunger = 100;
   thirst = 100;
   stamina = 100;
+  battery = 100;
   flaresCount = 2;
   flashlightOn = true;
+  isHiding = false;
+  currentHideSpot = null;
   player.x = 1200;
   player.y = 900;
   player.speed = player.baseSpeed;
@@ -758,17 +898,18 @@ function reiniciarJogo() {
   playerBoardedShip = false;
   shipLiftOffset = 0;
   liftParticles = [];
-  acidProjectiles = [];
-  acidPuddles = [];
   activeFlares = [];
   footprints = [];
+  soundWaves = [];
   escapeShip.launched = false;
   escapeShip.progress = 0;
 
   atualizarSomMotorNave(false, 0);
   atualizarHUDStatus();
+  document.getElementById('stealth-banner').style.display = 'none';
   document.getElementById('parts-val').innerText = '0/3';
   document.getElementById('flares-val').innerText = flaresCount;
+  document.getElementById('notes-val').innerText = '0/4';
   document.getElementById('flashlight-val').innerText = 'LIGADA';
   document.getElementById('flashlight-val').style.color = '#38bdf8';
   document.getElementById('game-over-screen').style.display = 'none';
@@ -778,6 +919,7 @@ function reiniciarJogo() {
     i.collected = false;
     if (i.type === 'ship_part') i.revealedOnRadar = false;
   });
+  loreNotes.forEach(n => n.read = false);
   npcs.forEach(n => n.solved = false);
 
   iniciarCenaIntroducao();
@@ -792,6 +934,7 @@ function atualizarHUDStatus() {
   const hVal = Math.round(hunger);
   const tVal = Math.round(thirst);
   const sVal = Math.round(stamina);
+  const bVal = Math.round(battery);
 
   document.getElementById('hunger-text').innerText = hVal + '%';
   document.getElementById('hunger-bar').style.width = hVal + '%';
@@ -804,6 +947,10 @@ function atualizarHUDStatus() {
   document.getElementById('stamina-text').innerText = sVal + '%';
   document.getElementById('stamina-bar').style.width = sVal + '%';
   document.getElementById('stamina-bar').style.background = sVal <= 25 ? '#ef4444' : '#22c55e';
+
+  document.getElementById('battery-text').innerText = bVal + '%';
+  document.getElementById('battery-bar').style.width = bVal + '%';
+  document.getElementById('battery-bar').style.background = bVal <= 20 ? '#ef4444' : '#facc15';
 
   let speedFactor = 1.0;
   if (hunger <= 0 || thirst <= 0) {
@@ -827,7 +974,7 @@ function gameLoop() {
   if (isGameOver || isVictory) return;
 
   animFrame++;
-  atualizarParticulasAmbiente();
+  atualizarAmbienteEClima();
 
   if (inIntro) {
     atualizarCenaIntroducao();
@@ -849,14 +996,13 @@ function gameLoop() {
     return;
   }
 
-  if (!inDialog) {
+  if (!inDialog && !readingNote) {
     atualizarJogador();
-    atualizarFomeSedeETempo();
+    atualizarFomeSedeBateria();
     atualizarNPCs();
     atualizarSinalizadores();
     atualizarZumbis();
-    atualizarMonstros();
-    atualizarProjeteisAcido();
+    atualizarMonstrosQuadrupedes();
     verificarInteracoes();
     atualizarDecolagemNave();
     verificarAtaqueInimigos();
@@ -876,7 +1022,7 @@ function gameLoop() {
   }
 }
 
-function atualizarParticulasAmbiente() {
+function atualizarAmbienteEClima() {
   for (let p of ashParticles) {
     p.x += p.vx;
     p.y += p.vy;
@@ -890,8 +1036,25 @@ function atualizarParticulasAmbiente() {
   for (let fp of footprints) fp.life--;
   footprints = footprints.filter(fp => fp.life > 0);
 
-  for (let ap of acidPuddles) ap.life--;
-  acidPuddles = acidPuddles.filter(ap => ap.life > 0);
+  for (let sw of soundWaves) {
+    sw.radius += 5.5;
+    sw.alpha -= 0.015;
+  }
+  soundWaves = soundWaves.filter(sw => sw.alpha > 0 && sw.radius < sw.maxRadius);
+
+  // Relâmpagos periódicos iluminando o escuro
+  lightningTimer++;
+  if (lightningTimer > 520 && Math.random() < 0.008) {
+    lightningTimer = 0;
+    lightningAlpha = 0.65;
+    setTimeout(() => {
+      tocarEfeitoSonoro('thunder');
+      screenShake = Math.max(screenShake, 6);
+    }, 350);
+  }
+  if (lightningAlpha > 0) {
+    lightningAlpha = Math.max(0, lightningAlpha - 0.045);
+  }
 }
 
 function atualizarSinalizadores() {
@@ -923,12 +1086,25 @@ function atualizarAnimacaoDecolagem() {
 
   if (shipLiftOffset > 460 && !isVictory) {
     isVictory = true;
-    document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salvo na Órbita!`;
+    const notesRead = loreNotes.filter(n => n.read).length;
+    document.getElementById('victory-stats').innerText = `Tempo Restante: ${lifeYears} Anos • Diários Lidos: ${notesRead}/4`;
     document.getElementById('victory-screen').style.display = 'flex';
   }
 }
 
-function atualizarFomeSedeETempo() {
+function atualizarFomeSedeBateria() {
+  // Consumo gradual da bateria da lanterna
+  if (flashlightOn && battery > 0) {
+    battery = Math.max(0, battery - 0.022);
+    if (battery === 0) {
+      flashlightOn = false;
+      const el = document.getElementById('flashlight-val');
+      el.innerText = 'SEM BATERIA';
+      el.style.color = '#ef4444';
+      mostrarPopupItem('A bateria da lanterna acabou!');
+    }
+  }
+
   hungerThirstTimer++;
   const interval = player.isSprinting ? 28 : (player.isMoving ? 44 : 65);
   if (hungerThirstTimer >= interval) {
@@ -939,7 +1115,7 @@ function atualizarFomeSedeETempo() {
   }
 
   agingTimer++;
-  const yearInterval = (hunger <= 0 || thirst <= 0) ? 130 : 270;
+  const yearInterval = (hunger <= 0 || thirst <= 0) ? 130 : 275;
   if (agingTimer >= yearInterval) {
     agingTimer = 0;
     lifeYears = Math.max(0, lifeYears - 1);
@@ -953,7 +1129,7 @@ function atualizarSomTensao() {
 
   if (isBeingChased || lifeYears <= 10 || isLaunching) {
     heartbeatTimer++;
-    const rate = isLaunching ? 24 : 38;
+    const rate = isLaunching ? 24 : 36;
     if (heartbeatTimer >= rate) {
       heartbeatTimer = 0;
       tocarEfeitoSonoro('heartbeat');
@@ -1064,6 +1240,14 @@ function checarColisaoCriatura(nextX, nextY, ent) {
 }
 
 function atualizarJogador() {
+  if (isHiding) {
+    player.isMoving = false;
+    player.isSprinting = false;
+    stamina = Math.min(100, stamina + 0.65);
+    atualizarHUDStatus();
+    return;
+  }
+
   player.isMoving = false;
   let dx = 0;
   let dy = 0;
@@ -1073,7 +1257,6 @@ function atualizarJogador() {
   if (keys['a'] || keys['arrowleft']) { dx -= 1; player.isMoving = true; player.facing = -1; }
   if (keys['d'] || keys['arrowright']) { dx += 1; player.isMoving = true; player.facing = 1; }
 
-  // Corrida (Sprint) com Shift
   if (keys['shift'] && player.isMoving && stamina > 2) {
     player.isSprinting = true;
     stamina = Math.max(0, stamina - 0.65);
@@ -1109,6 +1292,11 @@ function atualizarJogador() {
         y: player.y + player.height - 2,
         life: 90
       });
+
+      // Correr emite ondas sonoras visíveis que atraem criaturas próximas
+      if (player.isSprinting) {
+        emitirOndaSonora(player.x + player.width / 2, player.y + player.height / 2, 260);
+      }
     }
   } else {
     stepSoundTimer = 12;
@@ -1145,17 +1333,20 @@ function atualizarNPCs() {
   }
 }
 
-function obterAlvoMaisProximo(ex, ey, defaultTargetX, defaultTargetY, detectRadius) {
-  // Sinalizadores têm prioridade máxima para distrair monstros e zumbis!
+function obterAlvoCriatura(ex, ey, px, py, detectRadius) {
   for (let f of activeFlares) {
-    const dFlare = Math.hypot(f.x - ex, f.y - ey);
-    if (dFlare < 520) {
+    if (Math.hypot(f.x - ex, f.y - ey) < 520) {
       return { x: f.x, y: f.y, isFlare: true };
     }
   }
-  const dPlayer = Math.hypot(defaultTargetX - ex, defaultTargetY - ey);
-  if (dPlayer < detectRadius) {
-    return { x: defaultTargetX, y: defaultTargetY, isFlare: false };
+
+  // Se o jogador estiver escondido com a lanterna desligada, fica invisível!
+  if (isHiding && !flashlightOn) {
+    return null;
+  }
+
+  if (Math.hypot(px - ex, py - ey) < detectRadius) {
+    return { x: px, y: py, isFlare: false };
   }
   return null;
 }
@@ -1171,7 +1362,7 @@ function atualizarZumbis() {
     }
   }
 
-  const detectionRadius = isLaunching ? 1100 : (flashlightOn ? 440 : 310);
+  const detectionRadius = isLaunching ? 1100 : (flashlightOn ? 410 : 260);
 
   for (let z of zombies) {
     const zx = z.x + z.width / 2;
@@ -1179,7 +1370,16 @@ function atualizarZumbis() {
     const px = player.x + player.width / 2;
     const py = player.y + player.height / 2;
 
-    const target = obterAlvoMaisProximo(zx, zy, px, py, playerInsideBuilding ? 0 : detectionRadius);
+    // Gemidos periódicos quando o jogador está por perto
+    z.groanTimer--;
+    if (z.groanTimer <= 0) {
+      z.groanTimer = 240 + Math.floor(Math.random() * 220);
+      if (Math.hypot(px - zx, py - zy) < 480) {
+        tocarEfeitoSonoro('zombie_groan');
+      }
+    }
+
+    const target = obterAlvoCriatura(zx, zy, px, py, playerInsideBuilding ? 0 : detectionRadius);
 
     if (target) {
       const dx = target.x - zx;
@@ -1219,7 +1419,7 @@ function atualizarZumbis() {
   }
 }
 
-function atualizarMonstros() {
+function atualizarMonstrosQuadrupedes() {
   let playerInsideBuilding = false;
   for (let b of buildings) {
     if (jogadorDentroDe(b)) {
@@ -1228,27 +1428,17 @@ function atualizarMonstros() {
     }
   }
 
-  for (let m of monsters) {
+  for (let m of quadrupedMonsters) {
     const mx = m.x + m.width / 2;
     const my = m.y + m.height / 2;
     const px = player.x + player.width / 2;
     const py = player.y + player.height / 2;
-    const baseRadius = isLaunching ? 1200 : (flashlightOn ? m.detectRadius : m.detectRadius * 0.72);
+    const baseRadius = isLaunching ? 1200 : (flashlightOn ? m.detectRadius : 220);
 
-    if (m.attackCooldown > 0) m.attackCooldown--;
-
-    // Passos pesados do Brutamonte tremem a câmera se estiver perto
-    if (m.kind === 'brute' && m.isMoving && animFrame % 28 === 0) {
-      const distPlayer = Math.hypot(px - mx, py - my);
-      if (distPlayer < 360) {
-        screenShake = Math.max(screenShake, 5);
-        tocarEfeitoSonoro('brute_step');
-      }
-    }
-
-    const target = obterAlvoMaisProximo(mx, my, px, py, playerInsideBuilding ? 0 : baseRadius);
+    const target = obterAlvoCriatura(mx, my, px, py, playerInsideBuilding ? 0 : baseRadius);
 
     if (target) {
+      m.investigateTimer = 0;
       const dx = target.x - mx;
       const dy = target.y - my;
       const dist = Math.hypot(dx, dy);
@@ -1257,25 +1447,13 @@ function atualizarMonstros() {
         isBeingChased = true;
         if (!m.wasChasing) {
           m.wasChasing = true;
-          if (m.kind === 'brute') {
-            tocarEfeitoSonoro('brute_roar');
-            screenShake = Math.max(screenShake, 8);
-          } else if (m.kind === 'stalker') {
-            tocarEfeitoSonoro('stalker_screech');
-          } else {
-            tocarEfeitoSonoro('acid_spit');
-          }
+          tocarEfeitoSonoro('quad_shriek');
+          screenShake = Math.max(screenShake, 8);
         }
       }
 
-      const chaseSpeed = isLaunching ? m.speed * 1.25 : m.speed;
-
-      if (m.kind === 'spitter' && !target.isFlare && dist < 240) {
-        m.vx = 0;
-        m.vy = 0;
-        m.isMoving = false;
-        m.facing = dx >= 0 ? 1 : -1;
-      } else if (dist > 16) {
+      const chaseSpeed = isLaunching ? m.speed * 1.2 : m.speed;
+      if (dist > 18) {
         m.vx = (dx / dist) * chaseSpeed;
         m.vy = (dy / dist) * chaseSpeed;
         m.isMoving = true;
@@ -1286,27 +1464,34 @@ function atualizarMonstros() {
         m.isMoving = false;
       }
 
-      if (m.kind === 'spitter' && !target.isFlare && m.attackCooldown <= 0 && dist < 390) {
-        m.attackCooldown = 140;
-        const speedProj = 4.2;
-        acidProjectiles.push({
-          x: mx,
-          y: my - 6,
-          vx: (dx / dist) * speedProj,
-          vy: (dy / dist) * speedProj,
-          life: 110
-        });
-        tocarEfeitoSonoro('acid_spit');
+      if (m.isMoving && animFrame % 12 === 0 && Math.hypot(px - mx, py - my) < 420) {
+        tocarEfeitoSonoro('quad_gallop');
+      }
+    } else if (m.investigateTimer > 0 && m.investigateX !== null) {
+      // Vai investigar onde ouviu passos correndo
+      m.investigateTimer--;
+      const dx = m.investigateX - mx;
+      const dy = m.investigateY - my;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 20) {
+        m.vx = (dx / dist) * (m.speed * 0.8);
+        m.vy = (dy / dist) * (m.speed * 0.8);
+        m.isMoving = true;
+        m.facing = dx >= 0 ? 1 : -1;
+      } else {
+        m.vx = 0;
+        m.vy = 0;
+        m.isMoving = false;
       }
     } else {
       m.wasChasing = false;
       m.patrolTimer++;
-      if (m.patrolTimer > 120 + Math.random() * 60) {
+      if (m.patrolTimer > 130 + Math.random() * 60) {
         m.patrolTimer = 0;
         const ang = Math.random() * Math.PI * 2;
         if (Math.random() > 0.35) {
-          m.vx = Math.cos(ang) * (m.speed * 0.5);
-          m.vy = Math.sin(ang) * (m.speed * 0.5);
+          m.vx = Math.cos(ang) * (m.speed * 0.42);
+          m.vy = Math.sin(ang) * (m.speed * 0.42);
           m.isMoving = true;
           m.facing = m.vx >= 0 ? 1 : -1;
         } else {
@@ -1319,35 +1504,6 @@ function atualizarMonstros() {
 
     moverCriaturaComDesvio(m);
   }
-}
-
-function atualizarProjeteisAcido() {
-  for (let p of acidProjectiles) {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
-
-    for (let b of buildings) {
-      if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) {
-        acidPuddles.push({ x: p.x, y: p.y, life: 240 });
-        p.life = 0;
-        break;
-      }
-    }
-
-    const dist = Math.hypot((player.x + player.width / 2) - p.x, (player.y + player.height / 2) - p.y);
-    if (dist < 18 && p.life > 0) {
-      acidPuddles.push({ x: p.x, y: p.y, life: 240 });
-      p.life = 0;
-      lifeYears = Math.max(0, lifeYears - 2);
-      flashDamage = 7;
-      atualizarHUDStatus();
-      tocarEfeitoSonoro('damage');
-    } else if (p.life === 1) {
-      acidPuddles.push({ x: p.x, y: p.y, life: 240 });
-    }
-  }
-  acidProjectiles = acidProjectiles.filter(p => p.life > 0);
 }
 
 function moverCriaturaComDesvio(ent) {
@@ -1386,12 +1542,23 @@ function contarPecasColetadas() {
 function verificarInteracoes() {
   activeNPC = null;
   activeItem = null;
+  activeNote = null;
+  activeHideSpot = null;
   activeShip = null;
   const prompt = document.getElementById('interaction-prompt');
 
+  if (isHiding) {
+    prompt.innerHTML = `Escondido em ${currentHideSpot.label} — Pressione <span class="key-highlight">[C]</span> ou <span class="key-highlight">[E]</span> para sair`;
+    prompt.style.display = 'block';
+    return;
+  }
+
+  const px = player.x + player.width / 2;
+  const py = player.y + player.height / 2;
+
   const distShip = Math.hypot(
-    (player.x + player.width / 2) - (escapeShip.x + escapeShip.width / 2),
-    (player.y + player.height / 2) - (escapeShip.y + escapeShip.height / 2)
+    px - (escapeShip.x + escapeShip.width / 2),
+    py - (escapeShip.y + escapeShip.height / 2)
   );
   if (distShip < 80 && !escapeShip.launched) {
     const parts = contarPecasColetadas();
@@ -1408,10 +1575,9 @@ function verificarInteracoes() {
   }
 
   for (let npc of npcs) {
-    const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
-    if (dist < 52) {
+    if (Math.hypot(px - (npc.x + npc.width/2), py - (npc.y + npc.height/2)) < 52) {
       activeNPC = npc;
-      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pedir ajuda a ${npc.name}`;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para falar com ${npc.name}`;
       prompt.style.display = 'block';
       return;
     }
@@ -1419,8 +1585,7 @@ function verificarInteracoes() {
 
   for (let item of itemsOnGround) {
     if (item.collected) continue;
-    const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
-    if (dist < 38) {
+    if (Math.hypot(px - item.x, py - item.y) < 38) {
       activeItem = item;
       prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.label}`;
       prompt.style.display = 'block';
@@ -1428,7 +1593,42 @@ function verificarInteracoes() {
     }
   }
 
+  for (let note of loreNotes) {
+    if (Math.hypot(px - note.x, py - note.y) < 38) {
+      activeNote = note;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para ler ${note.title}`;
+      prompt.style.display = 'block';
+      return;
+    }
+  }
+
+  for (let hs of hidingSpots) {
+    if (Math.hypot(px - (hs.x + hs.w / 2), py - (hs.y + hs.h / 2)) < 42) {
+      activeHideSpot = hs;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[C]</span> ou <span class="key-highlight">[E]</span> para se esconder em ${hs.label}`;
+      prompt.style.display = 'block';
+      return;
+    }
+  }
+
   prompt.style.display = 'none';
+}
+
+function abrirNota(note) {
+  readingNote = true;
+  note.read = true;
+  const totalRead = loreNotes.filter(n => n.read).length;
+  document.getElementById('notes-val').innerText = `${totalRead}/4`;
+  document.getElementById('interaction-prompt').style.display = 'none';
+  document.getElementById('note-title').innerText = note.title;
+  document.getElementById('note-body').innerText = note.text;
+  document.getElementById('note-modal').style.display = 'flex';
+  tocarEfeitoSonoro('item');
+}
+
+function fecharNota() {
+  readingNote = false;
+  document.getElementById('note-modal').style.display = 'none';
 }
 
 function atualizarDecolagemNave() {
@@ -1469,9 +1669,10 @@ function atualizarDecolagemNave() {
 
 function coletarItem(item) {
   item.collected = true;
-  lifeYears = Math.min(100, lifeYears + item.years);
+  lifeYears = Math.min(100, lifeYears + (item.years || 0));
   hunger = Math.min(100, hunger + (item.hunger || 0));
   thirst = Math.min(100, thirst + (item.thirst || 0));
+  if (item.battery) battery = Math.min(100, battery + item.battery);
 
   atualizarHUDStatus();
 
@@ -1484,6 +1685,9 @@ function coletarItem(item) {
     } else {
       mostrarPopupItem(`Peça da Nave (${parts}/3): ${item.label}!`);
     }
+  } else if (item.type === 'battery') {
+    tocarEfeitoSonoro('item');
+    mostrarPopupItem(`Recarregou Lanterna (+${item.battery}% Bateria)`);
   } else if (item.type === 'flare') {
     flaresCount++;
     document.getElementById('flares-val').innerText = flaresCount;
@@ -1508,7 +1712,7 @@ function mostrarPopupItem(texto) {
 }
 
 function verificarAtaqueInimigos() {
-  if (playerBoardedShip) return;
+  if (playerBoardedShip || (isHiding && !flashlightOn)) return;
 
   const px = player.x + player.width / 2;
   const py = player.y + player.height / 2;
@@ -1523,12 +1727,12 @@ function verificarAtaqueInimigos() {
     }
   }
 
-  for (let m of monsters) {
+  for (let m of quadrupedMonsters) {
     const dist = Math.hypot(px - (m.x + m.width / 2), py - (m.y + m.height / 2));
-    const hitRange = m.kind === 'brute' ? 30 : 25;
-    if (dist < hitRange && animFrame % 18 === 0) {
+    if (dist < 28 && animFrame % 18 === 0) {
       lifeYears = Math.max(0, lifeYears - m.damage);
-      flashDamage = 8;
+      flashDamage = 9;
+      screenShake = Math.max(screenShake, 10);
       atualizarHUDStatus();
       tocarEfeitoSonoro('damage');
     }
@@ -1583,7 +1787,7 @@ function responderNPC(npc, opcao) {
     const part = itemsOnGround.find(i => i.id === opcao.revealPartId);
     if (part) {
       part.revealedOnRadar = true;
-      mostrarPopupItem(`SINAL DETECTADO NO RADAR: ${part.label}!`);
+      mostrarPopupItem(`SINAL DETECTADO NO SONAR: ${part.label}!`);
     }
   } else {
     npc.solved = true;
@@ -1630,7 +1834,7 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
     const smokeX = fx + Math.sin(progress * 5 + i) * 6 * escala;
     const smokeRadius = (4 + progress * 8) * escala;
 
-    ctx.fillStyle = `rgba(35, 30, 28, ${(1 - progress) * 0.45})`;
+    ctx.fillStyle = `rgba(30, 26, 24, ${(1 - progress) * 0.48})`;
     ctx.beginPath();
     ctx.arc(smokeX, smokeY, smokeRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -1659,7 +1863,7 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
 }
 
 // ==========================================
-// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO
+// CONSTRUÇÕES DESTRUÍDAS MAIS REALISTAS
 // ==========================================
 function desenharConstrucaoInterior(b) {
   const bx = b.x - camera.x;
@@ -1669,47 +1873,69 @@ function desenharConstrucaoInterior(b) {
 
   const isInside = jogadorDentroDe(b);
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(bx + 8, by + 10, b.w, b.h);
+  // Sombra projetada
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.fillRect(bx + 10, by + 12, b.w, b.h);
 
-  ctx.fillStyle = b.type === 'clinic' ? '#2c343b' : '#2d241e';
+  // Piso de concreto sujo/rachado
+  ctx.fillStyle = b.type === 'clinic' ? '#262d33' : (b.type === 'house' ? '#27201b' : '#241d18');
   ctx.fillRect(bx, by, b.w, b.h);
 
-  ctx.strokeStyle = b.type === 'clinic' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.28)';
-  ctx.lineWidth = 1;
-  for (let px = bx + 20; px < bx + b.w; px += 20) {
-    ctx.beginPath(); ctx.moveTo(px, by); ctx.lineTo(px, by + b.h); ctx.stroke();
-  }
-  for (let py = by + 20; py < by + b.h; py += 20) {
-    ctx.beginPath(); ctx.moveTo(bx, py); ctx.lineTo(bx + b.w, py); ctx.stroke();
-  }
+  // Manchas de fuligem e umidade no piso
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.arc(bx + b.w * 0.35, by + b.h * 0.45, 24, 0, Math.PI * 2);
+  ctx.arc(bx + b.w * 0.72, by + b.h * 0.68, 18, 0, Math.PI * 2);
+  ctx.fill();
 
-  if (b.type === 'clinic') {
-    ctx.fillStyle = '#5a6875';
-    ctx.fillRect(bx + b.w - 52, by + 18, 36, 18);
-    ctx.fillStyle = '#8b2635';
-    ctx.fillRect(bx + b.w - 48, by + 21, 24, 12);
+  // Rachaduras no piso
+  ctx.strokeStyle = 'rgba(10, 8, 6, 0.55)';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(bx + 25, by + 30);
+  ctx.lineTo(bx + 55, by + 58);
+  ctx.lineTo(bx + 48, by + 82);
+  ctx.moveTo(bx + b.w - 30, by + b.h - 25);
+  ctx.lineTo(bx + b.w - 65, by + b.h - 55);
+  ctx.stroke();
 
+  // Mobília destruída e escombros internos
+  if (b.type === 'house') {
+    // Mesa quebrada tombada
+    ctx.fillStyle = '#442c1e';
+    ctx.save();
+    ctx.translate(bx + b.w - 46, by + 42);
+    ctx.rotate(0.28);
+    ctx.fillRect(-16, -10, 32, 20);
+    ctx.strokeStyle = '#1c120c';
+    ctx.strokeRect(-16, -10, 32, 20);
+    ctx.restore();
+
+    // Tapete rasgado
+    ctx.fillStyle = 'rgba(127, 29, 29, 0.35)';
+    ctx.fillRect(bx + 45, by + 55, 50, 34);
+  } else if (b.type === 'clinic') {
     ctx.fillStyle = '#475569';
-    ctx.fillRect(bx + 16, by + 18, 22, 34);
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx + 16, by + 18, 22, 34);
+    ctx.fillRect(bx + b.w - 52, by + 18, 36, 18);
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(bx + b.w - 48, by + 21, 24, 12);
   } else {
-    ctx.fillStyle = '#6b492b';
+    ctx.fillStyle = '#573b22';
     ctx.fillRect(bx + 18, by + 20, 26, 26);
-    ctx.strokeStyle = '#2b1d10';
+    ctx.strokeStyle = '#1f140b';
     ctx.strokeRect(bx + 18, by + 20, 26, 26);
-
-    ctx.fillStyle = '#7c2d12';
-    ctx.beginPath();
-    ctx.arc(bx + b.w - 30, by + b.h - 32, 11, 0, Math.PI * 2);
-    ctx.fill();
   }
 
+  // Tijolos e escombros caídos junto às paredes
+  ctx.fillStyle = '#4a3a30';
+  ctx.fillRect(bx + 14, by + b.h - 22, 9, 7);
+  ctx.fillRect(bx + b.w - 28, by + 16, 11, 8);
+  ctx.fillRect(bx + b.w - 22, by + b.h - 26, 8, 8);
+
+  // Paredes com aparência desgastada
   const walls = obterParedesConstrucao(b);
-  ctx.fillStyle = '#59463a';
-  ctx.strokeStyle = '#1c1511';
+  ctx.fillStyle = '#4c3b31';
+  ctx.strokeStyle = '#140f0c';
   ctx.lineWidth = 2;
 
   for (let w of walls) {
@@ -1719,13 +1945,16 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeRect(wx, wy, w.w, w.h);
   }
 
-  ctx.fillStyle = 'rgba(255, 204, 0, 0.22)';
+  // Soleira da porta
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
   if (b.doorSide === 'bottom') {
     ctx.fillRect(bx + b.doorPos, by + b.h - 10, b.doorWidth, 10);
   } else if (b.doorSide === 'top') {
     ctx.fillRect(bx + b.doorPos, by, b.doorWidth, 10);
   } else if (b.doorSide === 'left') {
     ctx.fillRect(bx, by + b.doorPos, 10, b.doorWidth);
+  } else if (b.doorSide === 'right') {
+    ctx.fillRect(bx + b.w - 10, by + b.doorPos, 10, b.doorWidth);
   }
 
   if (b.onFire) {
@@ -1734,7 +1963,7 @@ function desenharConstrucaoInterior(b) {
 
   ctx.fillStyle = isInside ? '#00ff88' : '#d6c3b3';
   ctx.font = '8px "Press Start 2P"';
-  ctx.fillText(isInside ? `${b.title} (INTERIOR)` : b.title, bx + 12, by - 6);
+  ctx.fillText(isInside ? `${b.title} (INTERIOR)` : b.title, bx + 8, by - 7);
 }
 
 function desenharTetosConstrucoes() {
@@ -1745,15 +1974,81 @@ function desenharTetosConstrucoes() {
     const by = b.y - camera.y;
     if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) continue;
 
-    ctx.fillStyle = 'rgba(38, 29, 24, 0.85)';
+    // Telhado desabado irregular com vigas expostas
+    ctx.fillStyle = 'rgba(30, 23, 19, 0.9)';
     ctx.beginPath();
     ctx.rect(bx + 10, by + 10, b.w - 20, b.h - 20);
-    ctx.moveTo(bx + 35, by + 35);
-    ctx.lineTo(bx + b.w - 40, by + 30);
-    ctx.lineTo(bx + b.w - 30, by + b.h - 35);
-    ctx.lineTo(bx + 30, by + b.h - 40);
+    ctx.moveTo(bx + 28, by + 28);
+    ctx.lineTo(bx + b.w - 48, by + 24);
+    ctx.lineTo(bx + b.w - 26, by + b.h - 42);
+    ctx.lineTo(bx + 36, by + b.h - 32);
     ctx.closePath();
     ctx.fill('evenodd');
+
+    // Vigas de madeira quebradas cruzando o buraco do telhado
+    ctx.strokeStyle = '#1c140f';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(bx + 22, by + 40);
+    ctx.lineTo(bx + b.w - 30, by + 65);
+    ctx.moveTo(bx + 45, by + b.h - 28);
+    ctx.lineTo(bx + b.w - 40, by + 30);
+    ctx.stroke();
+  }
+}
+
+function desenharEsconderijos() {
+  for (let hs of hidingSpots) {
+    const sx = hs.x - camera.x;
+    const sy = hs.y - camera.y;
+    if (sx < -80 || sx > canvas.width + 80 || sy < -80 || sy > canvas.height + 80) continue;
+
+    if (hs.type === 'locker') {
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.fillRect(sx, sy, hs.w, hs.h);
+      ctx.strokeRect(sx, sy, hs.w, hs.h);
+
+      // Frestas de ventilação do armário
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(sx + 6, sy + 7, hs.w - 12, 3);
+      ctx.fillRect(sx + 6, sy + 13, hs.w - 12, 3);
+    } else {
+      // Escombros de concreto
+      ctx.fillStyle = '#44403c';
+      ctx.strokeStyle = '#1c1917';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy + hs.h);
+      ctx.lineTo(sx + 10, sy + 4);
+      ctx.lineTo(sx + hs.w - 8, sy + 8);
+      ctx.lineTo(sx + hs.w, sy + hs.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
+function desenharDiariosChao() {
+  for (let note of loreNotes) {
+    const nx = note.x - camera.x;
+    const ny = note.y - camera.y;
+    if (nx < -80 || nx > canvas.width + 80 || ny < -80 || ny > canvas.height + 80) continue;
+
+    ctx.fillStyle = note.read ? 'rgba(168, 162, 158, 0.25)' : 'rgba(250, 204, 21, 0.3)';
+    ctx.beginPath();
+    ctx.arc(nx, ny, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Folha de papel amassada
+    ctx.fillStyle = note.read ? '#a8a29e' : '#fef08a';
+    ctx.fillRect(nx - 6, ny - 7, 12, 14);
+    ctx.fillStyle = '#44403c';
+    ctx.fillRect(nx - 4, ny - 4, 8, 1.5);
+    ctx.fillRect(nx - 4, ny - 1, 7, 1.5);
+    ctx.fillRect(nx - 4, ny + 2, 8, 1.5);
   }
 }
 
@@ -1919,27 +2214,53 @@ function desenharNaveEspacial() {
 }
 
 function desenharCenario() {
+  // Detalhes de rachaduras e crateras no solo
+  for (let gd of groundDetails) {
+    const gx = gd.x - camera.x;
+    const gy = gd.y - camera.y;
+    if (gx < -60 || gx > canvas.width + 60 || gy < -60 || gy > canvas.height + 60) continue;
+
+    if (gd.type === 'crater') {
+      ctx.fillStyle = 'rgba(8, 5, 4, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(gx, gy, gd.r, gd.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(8, 5, 4, 0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + gd.r, gy + gd.r * 0.5);
+      ctx.lineTo(gx + gd.r * 1.4, gy - gd.r * 0.2);
+      ctx.stroke();
+    }
+  }
+
   for (let b of buildings) {
     desenharConstrucaoInterior(b);
   }
+
+  desenharEsconderijos();
+  desenharDiariosChao();
 
   for (let c of wreckedCars) {
     desenharCarroDestruido(c);
   }
 
-  // Pegadas na poeira e poças de ácido
   for (let fp of footprints) {
-    ctx.fillStyle = `rgba(10, 7, 5, ${(fp.life / 90) * 0.45})`;
+    ctx.fillStyle = `rgba(8, 5, 4, ${(fp.life / 90) * 0.48})`;
     ctx.beginPath();
     ctx.arc(fp.x - camera.x, fp.y - camera.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  for (let ap of acidPuddles) {
-    ctx.fillStyle = `rgba(132, 204, 22, ${(ap.life / 240) * 0.55})`;
+  // Ondas sonoras visuais ao correr
+  for (let sw of soundWaves) {
+    ctx.strokeStyle = `rgba(255, 255, 255, ${sw.alpha * 0.32})`;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(ap.x - camera.x, ap.y - camera.y, 12, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(sw.x - camera.x, sw.y - camera.y, sw.radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   desenharNaveEspacial();
@@ -1967,7 +2288,7 @@ function desenharSinalizadores() {
 }
 
 // ==========================================
-// ITENS NO CHÃO (COMBUSTÍVEL, TRAJE, CHIP E SINALIZADOR)
+// ITENS NO CHÃO
 // ==========================================
 function desenharItemChao(item) {
   if (item.collected) return;
@@ -1994,19 +2315,8 @@ function desenharItemChao(item) {
 
       ctx.fillStyle = '#991b1b';
       ctx.fillRect(screenX - 4, screenY - 10, 7, 3);
-
       ctx.fillStyle = '#facc15';
       ctx.fillRect(screenX + 3, screenY - 10, 3, 4);
-
-      ctx.strokeStyle = '#fca5a5';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(screenX - 4, screenY - 3);
-      ctx.lineTo(screenX + 4, screenY + 5);
-      ctx.moveTo(screenX + 4, screenY - 3);
-      ctx.lineTo(screenX - 4, screenY + 5);
-      ctx.stroke();
-
     } else if (item.partShape === 'suit') {
       ctx.fillStyle = '#e2e8f0';
       ctx.strokeStyle = '#0f172a';
@@ -2018,23 +2328,17 @@ function desenharItemChao(item) {
 
       ctx.fillStyle = '#0284c7';
       ctx.fillRect(screenX - 3, screenY - 8, 6, 3);
-
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
       ctx.roundRect(screenX - 6, screenY - 2, 12, 9, 2);
       ctx.fill();
       ctx.stroke();
-
-      ctx.fillRect(screenX - 5, screenY + 7, 4, 5);
-      ctx.fillRect(screenX + 1, screenY + 7, 4, 5);
-
     } else if (item.partShape === 'chip') {
       ctx.fillStyle = '#facc15';
       for (let p = -5; p <= 5; p += 5) {
         ctx.fillRect(screenX - 10, screenY + p - 1, 20, 2);
         ctx.fillRect(screenX + p - 1, screenY - 10, 2, 20);
       }
-
       ctx.fillStyle = '#0f172a';
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 1.4;
@@ -2042,11 +2346,22 @@ function desenharItemChao(item) {
       ctx.roundRect(screenX - 7, screenY - 7, 14, 14, 2);
       ctx.fill();
       ctx.stroke();
-
       ctx.fillStyle = '#00e5ff';
       ctx.fillRect(screenX - 3, screenY - 3, 6, 6);
     }
+  } else if (item.type === 'battery') {
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.32)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 10, 0, Math.PI * 2);
+    ctx.fill();
 
+    ctx.fillStyle = '#facc15';
+    ctx.strokeStyle = '#1c1917';
+    ctx.lineWidth = 1;
+    ctx.fillRect(screenX - 4, screenY - 5, 8, 10);
+    ctx.strokeRect(screenX - 4, screenY - 5, 8, 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(screenX - 2, screenY - 7, 4, 2);
   } else if (item.type === 'flare') {
     ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
     ctx.beginPath();
@@ -2070,8 +2385,6 @@ function desenharItemChao(item) {
     ctx.roundRect(screenX - 4, screenY - 6, 8, 12, 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(screenX - 2, screenY - 8, 4, 2);
   } else {
     ctx.fillStyle = 'rgba(255, 153, 0, 0.35)';
     ctx.beginPath();
@@ -2096,18 +2409,13 @@ function desenharItemChao(item) {
     const tagX = screenX - tagW / 2;
     const tagY = screenY - 32;
 
-    let accentColor = '#00e5ff';
-    if (item.partShape === 'fuel' || item.type === 'flare') accentColor = '#ef4444';
-    else if (item.type === 'water') accentColor = '#00ccff';
-    else if (item.type === 'food') accentColor = '#ff9900';
-
     ctx.fillStyle = 'rgba(14, 10, 8, 0.92)';
     ctx.beginPath();
     ctx.roundRect(tagX, tagY, tagW, tagH, 4);
     ctx.fill();
 
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
@@ -2118,167 +2426,101 @@ function desenharItemChao(item) {
 }
 
 // ==========================================
-// DESENHO DOS MONSTROS MUTANTES
+// MONSTRO QUADRÚPEDE ESQUELÉTICO E ASSUSTADOR
 // ==========================================
-function desenharMonstro(m) {
+function desenharMonstroQuadrupede(m) {
   const screenX = m.x - camera.x;
   const screenY = m.y - camera.y;
 
-  if (screenX < -90 || screenX > canvas.width + 90 || screenY < -90 || screenY > canvas.height + 90) return;
+  if (screenX < -100 || screenX > canvas.width + 100 || screenY < -100 || screenY > canvas.height + 100) return;
 
   const facing = m.facing || 1;
-  const cycle = animFrame * (m.kind === 'stalker' ? 0.32 : 0.16);
-  const legSwing = m.isMoving ? Math.sin(cycle) * 5 : 0;
-  const bob = m.isMoving ? Math.abs(Math.sin(cycle)) * 2.5 : 0;
+  const cycle = animFrame * (m.wasChasing ? 0.42 : 0.18);
+  const strideFront = m.isMoving ? Math.sin(cycle) * 8 : 0;
+  const strideBack = m.isMoving ? Math.cos(cycle) * 8 : 0;
+  const spineWave = m.isMoving ? Math.sin(cycle * 2) * 2.5 : 0;
+
   const cx = screenX + m.width / 2;
+  const cy = screenY + m.height / 2;
 
-  const auraColor = m.kind === 'spitter' ? 'rgba(34, 197, 94, 0.22)' : 'rgba(168, 85, 247, 0.22)';
-  ctx.fillStyle = auraColor;
+  // Sombra rastejante no chão
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
   ctx.beginPath();
-  ctx.arc(cx, screenY + m.height / 2, m.width * 0.85, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-  ctx.beginPath();
-  ctx.ellipse(cx, screenY + m.height - 2, m.width * 0.48, 5.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 12, 24, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = '#09090b';
+  ctx.lineWidth = 2.2;
+
+  // Patas traseiras articuladas
+  const backHipX = cx - facing * 14;
+  const backFootX = backHipX - facing * 6 + strideBack;
+  ctx.beginPath();
+  ctx.moveTo(backHipX, cy + spineWave);
+  ctx.lineTo(backHipX - facing * 10, cy - 6); // Joelho pontudo para cima
+  ctx.lineTo(backFootX, cy + 13);
+  ctx.stroke();
+
+  // Patas dianteiras longas com garras
+  const frontShoulderX = cx + facing * 13;
+  const frontFootX = frontShoulderX + facing * 7 + strideFront;
+  ctx.beginPath();
+  ctx.moveTo(frontShoulderX, cy - spineWave);
+  ctx.lineTo(frontShoulderX + facing * 9, cy + 3);
+  ctx.lineTo(frontFootX, cy + 13);
+  ctx.stroke();
+
+  // Corpo esquelético curvado
+  ctx.fillStyle = '#18181b';
+  ctx.beginPath();
+  ctx.moveTo(cx - facing * 18, cy + 2 + spineWave);
+  ctx.quadraticCurveTo(cx, cy - 11 - spineWave, cx + facing * 16, cy - 1);
+  ctx.lineTo(cx + facing * 12, cy + 6);
+  ctx.quadraticCurveTo(cx, cy + 2, cx - facing * 16, cy + 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Costelas / espinhos dorsais pálidos
+  ctx.strokeStyle = '#71717a';
+  ctx.lineWidth = 1.4;
+  for (let r = -8; r <= 6; r += 5) {
+    ctx.beginPath();
+    ctx.moveTo(cx + r, cy - 5 - spineWave * 0.5);
+    ctx.lineTo(cx + r - facing * 2, cy - 10 - spineWave * 0.5);
+    ctx.stroke();
+  }
+
+  // Cabeça alongada próxima ao chão
+  const headX = cx + facing * 20;
+  const headY = cy + 2 - spineWave;
+  ctx.fillStyle = '#27272a';
+  ctx.strokeStyle = '#09090b';
   ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(headX, headY, 8, 5.5, facing * 0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 
-  if (m.kind === 'brute') {
-    ctx.fillStyle = '#3b0764';
-    ctx.fillRect(cx - 12, screenY + 34 - bob, 9, 14 + legSwing);
-    ctx.strokeRect(cx - 12, screenY + 34 - bob, 9, 14 + legSwing);
-    ctx.fillRect(cx + 3, screenY + 34 - bob, 9, 14 - legSwing);
-    ctx.strokeRect(cx + 3, screenY + 34 - bob, 9, 14 - legSwing);
+  // Olhos predadores brilhando no escuro
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(headX + facing * 4, headY - 1.5, 2.2, 0, Math.PI * 2);
+  ctx.fill();
 
-    ctx.fillStyle = '#581c87';
-    ctx.beginPath();
-    ctx.roundRect(cx - 17, screenY + 12 - bob, 34, 24, 5);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#c084fc';
-    ctx.beginPath();
-    ctx.moveTo(cx - 16, screenY + 14 - bob);
-    ctx.lineTo(cx - 22, screenY + 4 - bob);
-    ctx.lineTo(cx - 10, screenY + 12 - bob);
-    ctx.moveTo(cx + 16, screenY + 14 - bob);
-    ctx.lineTo(cx + 22, screenY + 4 - bob);
-    ctx.lineTo(cx + 10, screenY + 12 - bob);
-    ctx.fill();
-
-    ctx.fillStyle = '#6b21a8';
-    ctx.beginPath();
-    ctx.roundRect(cx - 22, screenY + 16 - bob - legSwing * 0.5, 7, 18, 3);
-    ctx.roundRect(cx + 15, screenY + 16 - bob + legSwing * 0.5, 7, 18, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#4c1d95';
-    ctx.beginPath();
-    ctx.arc(cx + facing * 2, screenY + 9 - bob, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#facc15';
-    ctx.beginPath();
-    ctx.arc(cx - 2 + facing * 4, screenY + 8 - bob, 2, 0, Math.PI * 2);
-    ctx.arc(cx + 4 + facing * 4, screenY + 8 - bob, 2, 0, Math.PI * 2);
-    ctx.fill();
-
-  } else if (m.kind === 'stalker') {
-    ctx.fillStyle = '#18181b';
-    ctx.fillRect(cx - 8, screenY + 26 - bob, 6, 15 + legSwing);
-    ctx.fillRect(cx + 2, screenY + 26 - bob, 6, 15 - legSwing);
-
-    ctx.fillStyle = '#27272a';
-    ctx.beginPath();
-    ctx.roundRect(cx - 10 + facing * 2, screenY + 12 - bob, 20, 16, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.strokeStyle = '#e879f9';
-    ctx.lineWidth = 2;
-    const clawX = facing === 1 ? cx + 10 : cx - 10;
-    ctx.beginPath();
-    ctx.moveTo(clawX, screenY + 18 - bob);
-    ctx.lineTo(clawX + facing * 12, screenY + 22 - bob);
-    ctx.moveTo(clawX, screenY + 22 - bob);
-    ctx.lineTo(clawX + facing * 11, screenY + 27 - bob);
-    ctx.stroke();
-
-    ctx.strokeStyle = '#09090b';
-    ctx.lineWidth = 1.5;
-    ctx.fillStyle = '#3f3f46';
-    ctx.beginPath();
-    ctx.arc(cx + facing * 4, screenY + 8 - bob, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#d946ef';
-    ctx.beginPath();
-    ctx.arc(cx + facing * 7, screenY + 7 - bob, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-
-  } else {
-    ctx.fillStyle = '#14532d';
-    ctx.fillRect(cx - 8, screenY + 27 - bob, 6, 14 + legSwing);
-    ctx.fillRect(cx + 2, screenY + 27 - bob, 6, 14 - legSwing);
-
-    ctx.fillStyle = '#166534';
-    ctx.beginPath();
-    ctx.roundRect(cx - 11, screenY + 12 - bob, 22, 17, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#4ade80';
-    ctx.beginPath();
-    ctx.arc(cx - facing * 6, screenY + 16 - bob, 5, 0, Math.PI * 2);
-    ctx.arc(cx - facing * 4, screenY + 23 - bob, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#15803d';
-    ctx.beginPath();
-    ctx.arc(cx + facing * 2, screenY + 7 - bob, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#a3e635';
-    ctx.beginPath();
-    ctx.arc(cx + facing * 6, screenY + 9 - bob, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const distToPlayer = Math.hypot((player.x + player.width / 2) - (m.x + m.width / 2), (player.y + player.height / 2) - (m.y + m.height / 2));
-  if (distToPlayer < 260 && !inIntro) {
-    ctx.fillStyle = m.kind === 'spitter' ? '#4ade80' : '#e879f9';
-    ctx.font = 'bold 10px Rajdhani, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(m.name.toUpperCase(), cx, screenY - 6 - bob);
-    ctx.textAlign = 'left';
-  }
+  // Halo nos olhos
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+  ctx.beginPath();
+  ctx.arc(headX + facing * 4, headY - 1.5, 6, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-function desenharProjeteisAcido() {
-  for (let p of acidProjectiles) {
-    const sx = p.x - camera.x;
-    const sy = p.y - camera.y;
-
-    ctx.fillStyle = 'rgba(74, 222, 128, 0.35)';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#a3e635';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
+// ==========================================
+// PERSONAGENS: JOGADOR, NPCs E ZUMBIS REALISTAS
+// ==========================================
 function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = false, isNPC = false) {
+  if (!isZombie && !isNPC && isHiding) return; // Oculto dentro do esconderijo
+
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
 
@@ -2293,7 +2535,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 
   const cx = screenX + 13;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
   ctx.beginPath();
   ctx.ellipse(cx, screenY + 38, 12, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -2309,7 +2551,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     ctx.stroke();
   }
 
-  const pantsColor = isZombie ? '#232b20' : (char.pantsColor || '#1b222c');
+  const pantsColor = isZombie ? '#1c2419' : (char.pantsColor || '#1b222c');
   ctx.lineWidth = 1.2;
   ctx.strokeStyle = '#0d0d0d';
 
@@ -2317,8 +2559,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     const stepFront = isMoving ? Math.max(0, Math.sin(cycle)) * 4 : 0;
     const dragLag = isMoving ? (6 + Math.sin(cycle) * 2) * facing : 4 * facing;
 
-    ctx.strokeStyle = '#0d0d0d';
-    ctx.fillStyle = '#1d241a';
+    ctx.fillStyle = '#161c14';
     ctx.beginPath();
     ctx.moveTo(cx - 2 * facing, screenY + 25 + bodyBob);
     ctx.lineTo(cx - 7 * facing, screenY + 25 + bodyBob);
@@ -2328,43 +2569,32 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#141110';
-    ctx.fillRect(cx - 5 * facing - dragLag - 3, screenY + 35, 8, 3.5);
-
     ctx.fillStyle = pantsColor;
     ctx.beginPath();
     ctx.roundRect(cx + (facing === 1 ? 0 : -6), screenY + 24 + bodyBob, 6, 11 - stepFront * 0.5, 2);
     ctx.fill();
     ctx.stroke();
-
-    ctx.fillStyle = '#141110';
-    ctx.fillRect(cx + (facing === 1 ? -0.5 : -6.5), screenY + 34 - stepFront * 0.5 + bodyBob * 0.3, 7, 4);
   } else {
     ctx.fillStyle = pantsColor;
     ctx.beginPath();
     ctx.roundRect(cx - 7, screenY + 24 - bodyBob, 6, 11 + legSwing, 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#141110';
-    ctx.fillRect(cx - 7.5, screenY + 33 + legSwing - bodyBob, 7, 4);
 
-    ctx.fillStyle = pantsColor;
     ctx.beginPath();
     ctx.roundRect(cx + 1, screenY + 24 - bodyBob, 6, 11 - legSwing, 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#141110';
-    ctx.fillRect(cx + 0.5, screenY + 33 - legSwing - bodyBob, 7, 4);
   }
 
-  ctx.fillStyle = isZombie ? '#4b6344' : char.skinColor;
+  ctx.fillStyle = isZombie ? '#3f5239' : char.skinColor;
   ctx.beginPath();
   ctx.roundRect(cx - 10, screenY + 14 - armSwing + (isZombie ? bodyBob : -bodyBob), 4, 11, 2);
   ctx.fill();
 
   const torsoY = isZombie ? screenY + 11 + bodyBob : screenY + 11 - bodyBob;
-  const torsoOffset = isZombie ? facing * 2 : 0;
-  ctx.fillStyle = isZombie ? '#33422e' : char.shirtColor;
+  const torsoOffset = isZombie ? facing * 2.5 : 0;
+  ctx.fillStyle = isZombie ? '#293625' : char.shirtColor;
   ctx.beginPath();
   ctx.roundRect(cx - 8 + torsoOffset, torsoY, 16, 15, 3);
   ctx.fill();
@@ -2377,12 +2607,13 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
       ctx.fillRect(cx - 3.5, torsoY + 4, 7, 2);
     }
   } else {
-    ctx.fillStyle = '#587350';
-    ctx.fillRect(cx - 4 + torsoOffset, torsoY + 6, 5, 3);
+    // Roupas rasgadas e manchas sombrias
+    ctx.fillStyle = '#4c1d1d';
+    ctx.fillRect(cx - 3 + torsoOffset, torsoY + 5, 6, 4);
   }
 
   if (isZombie) {
-    ctx.fillStyle = '#587350';
+    ctx.fillStyle = '#475c40';
     ctx.beginPath();
     const reachX = facing === 1 ? cx + 3 : cx - 14;
     ctx.roundRect(reachX, torsoY + 2 + (armSwing * 0.4), 11, 4, 2);
@@ -2394,32 +2625,28 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     ctx.roundRect(cx + 6, torsoY + 2 + armSwing, 4.5, 9, 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = char.skinColor;
-    ctx.beginPath();
-    ctx.arc(cx + 8.2, torsoY + 12 + armSwing, 2.2, 0, Math.PI * 2);
-    ctx.fill();
   }
 
-  const headX = cx + (isZombie ? facing * 2.5 : 0);
+  const headX = cx + (isZombie ? facing * 3 : 0);
   const headY = isZombie ? screenY + 5 + bodyBob : screenY + 5 - bodyBob;
 
-  ctx.fillStyle = isZombie ? '#5d7a54' : char.skinColor;
+  ctx.fillStyle = isZombie ? '#4b6144' : char.skinColor;
   ctx.beginPath();
   ctx.arc(headX, headY, 7.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = isZombie ? '#242922' : (char.hairColor || '#1c1613');
+  ctx.fillStyle = isZombie ? '#1c211b' : (char.hairColor || '#1c1613');
   ctx.beginPath();
   ctx.arc(headX, headY - 1.5, 7.6, Math.PI, 0);
   ctx.fill();
 
   const eyeShift = facing * 2;
   if (isZombie) {
-    ctx.fillStyle = '#ff1e38';
+    ctx.fillStyle = '#dc2626';
     ctx.beginPath();
-    ctx.arc(headX - 2 + eyeShift, headY + 0.5, 1.6, 0, Math.PI * 2);
-    ctx.arc(headX + 2.5 + eyeShift, headY + 0.5, 1.6, 0, Math.PI * 2);
+    ctx.arc(headX - 2 + eyeShift, headY + 0.5, 1.5, 0, Math.PI * 2);
+    ctx.arc(headX + 2.5 + eyeShift, headY + 0.5, 1.5, 0, Math.PI * 2);
     ctx.fill();
   } else {
     ctx.fillStyle = '#111';
@@ -2429,14 +2656,14 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 
   if (isNPC) {
     const floatY = Math.sin(animFrame * 0.1) * 2;
-    ctx.fillStyle = '#ffcc00';
+    ctx.fillStyle = '#facc15';
     ctx.font = '11px "Press Start 2P"';
     ctx.fillText('?', cx - 4, screenY - 8 + floatY);
   }
 }
 
 // ==========================================
-// MINIMAPA NO CANTO SUPERIOR DIREITO
+// SONAR TÁTICO (MINIMAPA)
 // ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
@@ -2446,29 +2673,29 @@ function desenharMinimapa() {
   const scale = 0.038;
 
   const bgGrad = miniCtx.createRadialGradient(mw / 2, mh / 2, 10, mw / 2, mh / 2, mw * 0.7);
-  bgGrad.addColorStop(0, '#1a1410');
-  bgGrad.addColorStop(1, '#0a0806');
+  bgGrad.addColorStop(0, '#17120e');
+  bgGrad.addColorStop(1, '#080605');
   miniCtx.fillStyle = bgGrad;
   miniCtx.fillRect(0, 0, mw, mh);
 
   const cx = mw / 2;
   const cy = mh / 2;
 
-  miniCtx.strokeStyle = 'rgba(255, 85, 0, 0.12)';
+  miniCtx.strokeStyle = 'rgba(217, 119, 6, 0.14)';
   miniCtx.lineWidth = 1;
   miniCtx.beginPath();
   miniCtx.moveTo(cx, 0); miniCtx.lineTo(cx, mh);
   miniCtx.moveTo(0, cy); miniCtx.lineTo(mw, cy);
   miniCtx.stroke();
 
-  miniCtx.strokeStyle = 'rgba(255, 140, 50, 0.18)';
+  miniCtx.strokeStyle = 'rgba(217, 119, 6, 0.2)';
   miniCtx.beginPath();
   miniCtx.arc(cx, cy, 26, 0, Math.PI * 2);
   miniCtx.arc(cx, cy, 52, 0, Math.PI * 2);
   miniCtx.stroke();
 
   const sweepAngle = (animFrame * 0.03) % (Math.PI * 2);
-  miniCtx.strokeStyle = 'rgba(0, 229, 255, 0.28)';
+  miniCtx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
   miniCtx.lineWidth = 1.5;
   miniCtx.beginPath();
   miniCtx.moveTo(cx, cy);
@@ -2480,13 +2707,6 @@ function desenharMinimapa() {
     const mx = cx + (b.x - player.x) * scale;
     const my = cy + (b.y - player.y) * scale;
     miniCtx.fillRect(mx, my, Math.max(4, b.w * scale), Math.max(4, b.h * scale));
-  }
-
-  miniCtx.fillStyle = 'rgba(180, 110, 75, 0.65)';
-  for (let c of wreckedCars) {
-    const mx = cx + (c.x - player.x) * scale;
-    const my = cy + (c.y - player.y) * scale;
-    miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
   }
 
   for (let item of itemsOnGround) {
@@ -2506,7 +2726,7 @@ function desenharMinimapa() {
       miniCtx.stroke();
       miniCtx.setLineDash([]);
     } else {
-      miniCtx.fillStyle = item.type === 'water' ? '#00ccff' : (item.type === 'flare' ? '#ef4444' : '#ff9900');
+      miniCtx.fillStyle = item.type === 'water' ? '#00ccff' : (item.type === 'battery' ? '#facc15' : '#ff9900');
       miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
     }
   }
@@ -2544,51 +2764,31 @@ function desenharMinimapa() {
     }
   }
 
-  for (let m of monsters) {
+  // Monstros quadrúpedes só aparecem no sonar quando correm ou durante um relâmpago!
+  for (let m of quadrupedMonsters) {
+    if (!m.wasChasing && lightningAlpha <= 0.1) continue;
     const mx = cx + (m.x - player.x) * scale;
     const my = cy + (m.y - player.y) * scale;
     if (mx >= 0 && mx <= mw && my >= 0 && my <= mh) {
-      miniCtx.fillStyle = '#d946ef';
+      miniCtx.fillStyle = '#e879f9';
       miniCtx.beginPath();
-      miniCtx.arc(mx, my, pulse + 1.2, 0, Math.PI * 2);
+      miniCtx.arc(mx, my, pulse + 1.5, 0, Math.PI * 2);
       miniCtx.fill();
     }
   }
 
-  miniCtx.fillStyle = 'rgba(0, 229, 255, 0.22)';
-  miniCtx.beginPath();
-  miniCtx.moveTo(cx, cy);
-  if (player.facing === 1) {
-    miniCtx.arc(cx, cy, 18, -0.45, 0.45);
-  } else {
-    miniCtx.arc(cx, cy, 18, Math.PI - 0.45, Math.PI + 0.45);
-  }
-  miniCtx.closePath();
-  miniCtx.fill();
-
-  miniCtx.fillStyle = '#00e5ff';
+  miniCtx.fillStyle = '#38bdf8';
   miniCtx.beginPath();
   miniCtx.arc(cx, cy, 3.8, 0, Math.PI * 2);
   miniCtx.fill();
-  miniCtx.strokeStyle = '#ffffff';
-  miniCtx.lineWidth = 1.2;
-  miniCtx.stroke();
-
-  miniCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-  miniCtx.font = 'bold 8px Rajdhani, sans-serif';
-  miniCtx.fillText('N', cx - 3, 9);
-  miniCtx.fillText('S', cx - 3, mh - 3);
-  miniCtx.fillText('O', 3, cy + 3);
-  miniCtx.fillText('L', mw - 8, cy + 3);
 }
 
 // ==========================================
-// ILUMINAÇÃO REALISTA + LANTERNA DIRECIONAL + CINZAS
+// ILUMINAÇÃO REALISTA + LANTERNA COM BATERIA + RELÂMPAGOS
 // ==========================================
 function desenharIluminacaoEClima() {
-  // Cinzas e brasas flutuando
   for (let p of ashParticles) {
-    ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.28)';
+    ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.25)';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
@@ -2599,29 +2799,30 @@ function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  // Camada de escuridão atmosférica com recorte da lanterna tática
   const lightCanvas = document.createElement('canvas');
   lightCanvas.width = canvas.width;
   lightCanvas.height = canvas.height;
   const lCtx = lightCanvas.getContext('2d');
 
-  lCtx.fillStyle = lifeYears <= 10 ? 'rgba(10, 4, 4, 0.84)' : 'rgba(6, 4, 3, 0.78)';
+  // Se houver um relâmpago, reduz a escuridão temporariamente
+  const baseDarkness = lightningAlpha > 0 ? Math.max(0.15, 0.85 - lightningAlpha) : 0.86;
+  lCtx.fillStyle = `rgba(5, 4, 3, ${baseDarkness})`;
   lCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
   lCtx.globalCompositeOperation = 'destination-out';
 
-  // Halo natural ao redor do jogador
-  const selfGrad = lCtx.createRadialGradient(screenPx, screenPy, 25, screenPx, screenPy, 135);
+  const selfGrad = lCtx.createRadialGradient(screenPx, screenPy, 20, screenPx, screenPy, 115);
   selfGrad.addColorStop(0, 'rgba(0,0,0,1)');
   selfGrad.addColorStop(1, 'rgba(0,0,0,0)');
   lCtx.fillStyle = selfGrad;
   lCtx.beginPath();
-  lCtx.arc(screenPx, screenPy, 135, 0, Math.PI * 2);
+  lCtx.arc(screenPx, screenPy, 115, 0, Math.PI * 2);
   lCtx.fill();
 
-  // Cone de luz da lanterna [F]
-  if (flashlightOn && !playerBoardedShip) {
-    const beamLen = 340;
+  // Lanterna pisca quando a bateria está abaixo de 20%
+  const batteryFlicker = battery < 20 ? (Math.sin(animFrame * 0.7) > -0.3) : true;
+  if (flashlightOn && battery > 0 && batteryFlicker && !playerBoardedShip) {
+    const beamLen = battery < 25 ? 240 : 340;
     const spread = 0.42;
     const coneGrad = lCtx.createRadialGradient(screenPx, screenPy, 15, screenPx, screenPy, beamLen);
     coneGrad.addColorStop(0, 'rgba(0,0,0,1)');
@@ -2636,20 +2837,24 @@ function desenharIluminacaoEClima() {
     lCtx.fill();
   }
 
-  // Luz dos sinalizadores ativos
   for (let f of activeFlares) {
     const fx = f.x - camera.x;
     const fy = f.y - camera.y;
-    const fGrad = lCtx.createRadialGradient(fx, fy, 10, fx, fy, 170);
+    const fGrad = lCtx.createRadialGradient(fx, fy, 10, fx, fy, 175);
     fGrad.addColorStop(0, 'rgba(0,0,0,1)');
     fGrad.addColorStop(1, 'rgba(0,0,0,0)');
     lCtx.fillStyle = fGrad;
     lCtx.beginPath();
-    lCtx.arc(fx, fy, 170, 0, Math.PI * 2);
+    lCtx.arc(fx, fy, 175, 0, Math.PI * 2);
     lCtx.fill();
   }
 
   ctx.drawImage(lightCanvas, 0, 0);
+
+  if (lightningAlpha > 0) {
+    ctx.fillStyle = `rgba(220, 235, 255, ${lightningAlpha * 0.28})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   if (flashDamage > 0) {
     ctx.fillStyle = `rgba(255, 0, 0, ${flashDamage * 0.08})`;
@@ -2659,10 +2864,10 @@ function desenharIluminacaoEClima() {
 }
 
 function desenhar() {
-  ctx.fillStyle = '#18120e';
+  ctx.fillStyle = '#140f0c';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.strokeStyle = 'rgba(255, 85, 0, 0.06)';
+  ctx.strokeStyle = 'rgba(217, 119, 6, 0.04)';
   ctx.lineWidth = 1;
   const startX = - (camera.x % 60);
   const startY = - (camera.y % 60);
@@ -2689,11 +2894,9 @@ function desenhar() {
     desenharPersonagemDetalhado(z.x, z.y, z, z.isMoving, true, false);
   }
 
-  for (let m of monsters) {
-    desenharMonstro(m);
+  for (let m of quadrupedMonsters) {
+    desenharMonstroQuadrupede(m);
   }
-
-  desenharProjeteisAcido();
 
   if (!playerBoardedShip && !inIntro) {
     desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
