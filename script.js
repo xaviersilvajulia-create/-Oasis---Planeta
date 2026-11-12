@@ -27,16 +27,15 @@ function iniciarAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AudioContext();
 
-  // Drone grave de suspense contínuo
   droneOsc1 = audioCtx.createOscillator();
   droneOsc2 = audioCtx.createOscillator();
   droneGain = audioCtx.createGain();
 
   droneOsc1.type = 'sawtooth';
-  droneOsc1.frequency.value = 55; // Lá grave (A1)
+  droneOsc1.frequency.value = 55;
 
   droneOsc2.type = 'sine';
-  droneOsc2.frequency.value = 58.27; // Dissonância leve para tensão
+  droneOsc2.frequency.value = 58.27;
 
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -124,42 +123,54 @@ const camera = { x: 0, y: 0 };
 const player = {
   x: 1200,
   y: 900,
-  width: 24,
-  height: 36,
+  width: 26,
+  height: 40,
   speed: 3.5,
-  skinColor: '#ffcc99',
-  shirtColor: '#224466',
-  pantsColor: '#111822',
+  skinColor: '#f1c27d',
+  shirtColor: '#2b4c6f',
+  pantsColor: '#1b222c',
+  hairColor: '#1c1613',
+  hasBackpack: true,
+  facing: 1,
   isMoving: false,
   inShelter: false
 };
 
 const keys = {};
 
-// 3 TORRES DE TRANSMISSÃO (OBJETIVO FINAL)
 const towers = [
   { id: 1, x: 650, y: 450, width: 36, height: 60, progress: 0, activated: false, name: "Torre Norte" },
   { id: 2, x: 1900, y: 800, width: 36, height: 60, progress: 0, activated: false, name: "Torre Leste" },
   { id: 3, x: 1150, y: 1650, width: 36, height: 60, progress: 0, activated: false, name: "Torre Sul" }
 ];
 
-// ESCONDERIJOS (CASAS EM RUÍNAS)
 const shelters = [
   { x: 1000, y: 700, width: 140, height: 110, name: "Casa em Ruínas A" },
   { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker Destruído" },
   { x: 400, y: 1500, width: 150, height: 120, name: "Estrutura Abandonada" }
 ];
 
-// ESTRUTURAS E CONSTRUÇÕES DESTRUIDAS (COM COLISÃO)
+// CONSTRUÇÕES QUEBRADAS (ALGUMAS COM FOGO ATIVO)
 const ruins = [
-  { x: 800, y: 1100, w: 100, h: 90 },
-  { x: 1500, y: 600, w: 130, h: 80 },
-  { x: 600, y: 600, w: 80, h: 70 },
-  { x: 1300, y: 1500, w: 110, h: 100 },
-  { x: 1100, y: 1000, w: 90, h: 60 }
+  { x: 800, y: 1100, w: 115, h: 95, type: 'building', onFire: true },
+  { x: 1500, y: 600, w: 140, h: 90, type: 'house', onFire: false },
+  { x: 600, y: 600, w: 95, h: 80, type: 'rubble', onFire: true },
+  { x: 1300, y: 1500, w: 125, h: 105, type: 'building', onFire: true },
+  { x: 1100, y: 1000, w: 105, h: 75, type: 'house', onFire: false },
+  { x: 1650, y: 1050, w: 110, h: 85, type: 'rubble', onFire: false },
+  { x: 920, y: 520, w: 120, h: 85, type: 'house', onFire: true }
 ];
 
-// SUPRIMENTOS NO CHÃO
+// CARROS DESTRUÍDOS PELO CAMINHO (COM COLISÃO E ALGUNS PEGANDO FOGO)
+const wreckedCars = [
+  { x: 1280, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
+  { x: 960, y: 940, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
+  { x: 1420, y: 1280, w: 74, h: 38, color: '#4f4632', onFire: true, dir: 1 },
+  { x: 720, y: 820, w: 70, h: 36, color: '#2f353b', onFire: true, dir: -1 },
+  { x: 1680, y: 760, w: 72, h: 36, color: '#593325', onFire: false, dir: 1 },
+  { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
+];
+
 const itemsOnGround = [
   { id: 1, x: 1150, y: 880, type: 'water', name: 'Garrafa de Água Potável', years: 3, supp: 10, collected: false },
   { id: 2, x: 1450, y: 1100, type: 'food', name: 'Ração Militar em Lata', years: 2, supp: 15, collected: false },
@@ -168,18 +179,20 @@ const itemsOnGround = [
   { id: 5, x: 1220, y: 1550, type: 'med', name: 'Adrenalina Sintética', years: 5, supp: 10, collected: false }
 ];
 
-// SOBREVIVENTES (NPCs COM DECISÕES CEGAS)
 const npcs = [
   {
     id: 1,
     name: "Marcus (Sobrevivente)",
     x: 1350,
     y: 750,
-    width: 24,
-    height: 36,
-    skinColor: '#d2b48c',
-    shirtColor: '#664422',
-    pantsColor: '#221100',
+    width: 26,
+    height: 40,
+    skinColor: '#c68642',
+    shirtColor: '#5c4033',
+    pantsColor: '#261c16',
+    hairColor: '#2c1e16',
+    hasBackpack: true,
+    facing: 1,
     vx: 0.8,
     vy: 0,
     moveTimer: 0,
@@ -196,11 +209,14 @@ const npcs = [
     name: "Doutora Elena",
     x: 850,
     y: 1250,
-    width: 24,
-    height: 36,
+    width: 26,
+    height: 40,
     skinColor: '#ffdbac',
-    shirtColor: '#882222',
-    pantsColor: '#331111',
+    shirtColor: '#d9dfe6',
+    pantsColor: '#2d3748',
+    hairColor: '#5a1e1e',
+    isMedic: true,
+    facing: -1,
     vx: -0.8,
     vy: 0,
     moveTimer: 0,
@@ -214,13 +230,12 @@ const npcs = [
   }
 ];
 
-// ZUMBIS
 const zombies = [
-  { x: 1600, y: 900, width: 24, height: 36, speed: 1.3, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
-  { x: 900, y: 600, width: 24, height: 36, speed: 1.1, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
-  { x: 1100, y: 1400, width: 24, height: 36, speed: 1.2, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
-  { x: 500, y: 900, width: 24, height: 36, speed: 1.0, vx: 0, vy: 0, patrolTimer: 0, isMoving: false },
-  { x: 1850, y: 700, width: 24, height: 36, speed: 1.2, vx: 0, vy: 0, patrolTimer: 0, isMoving: false }
+  { x: 1600, y: 900, width: 26, height: 40, speed: 1.3, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
+  { x: 900, y: 600, width: 26, height: 40, speed: 1.1, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1100, y: 1400, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 500, y: 900, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1850, y: 700, width: 26, height: 40, speed: 1.2, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
 ];
 
 function redimensionarCanvas() {
@@ -312,7 +327,6 @@ function gameLoop() {
 function atualizarSomTensao() {
   if (!audioEnabled || !audioCtx) return;
 
-  // Batida cardíaca quando um zumbi está perseguindo
   if (isBeingChased && !player.inShelter) {
     heartbeatTimer++;
     if (heartbeatTimer >= 38) {
@@ -324,13 +338,24 @@ function atualizarSomTensao() {
   }
 }
 
-function checarColisaoRuin(nextX, nextY) {
+// COLISÃO COM CONSTRUÇÕES QUEBRADAS E CARROS DESTRUÍDOS
+function checarColisaoObstaculos(nextX, nextY) {
   for (let r of ruins) {
     if (
       nextX < r.x + r.w &&
       nextX + player.width > r.x &&
       nextY < r.y + r.h &&
       nextY + player.height > r.y
+    ) {
+      return true;
+    }
+  }
+  for (let c of wreckedCars) {
+    if (
+      nextX < c.x + c.w &&
+      nextX + player.width > c.x &&
+      nextY < c.y + c.h &&
+      nextY + player.height > c.y
     ) {
       return true;
     }
@@ -345,11 +370,11 @@ function atualizarJogador() {
 
   if (keys['w'] || keys['arrowup']) { nextY -= player.speed; player.isMoving = true; }
   if (keys['s'] || keys['arrowdown']) { nextY += player.speed; player.isMoving = true; }
-  if (keys['a'] || keys['arrowleft']) { nextX -= player.speed; player.isMoving = true; }
-  if (keys['d'] || keys['arrowright']) { nextX += player.speed; player.isMoving = true; }
+  if (keys['a'] || keys['arrowleft']) { nextX -= player.speed; player.isMoving = true; player.facing = -1; }
+  if (keys['d'] || keys['arrowright']) { nextX += player.speed; player.isMoving = true; player.facing = 1; }
 
-  if (!checarColisaoRuin(nextX, player.y)) player.x = nextX;
-  if (!checarColisaoRuin(player.x, nextY)) player.y = nextY;
+  if (!checarColisaoObstaculos(nextX, player.y)) player.x = nextX;
+  if (!checarColisaoObstaculos(player.x, nextY)) player.y = nextY;
 }
 
 function atualizarCamera() {
@@ -384,6 +409,7 @@ function atualizarNPCs() {
       const d = dirs[Math.floor(Math.random() * dirs.length)];
       npc.vx = d[0] * 0.8;
       npc.vy = d[1] * 0.8;
+      if (d[0] !== 0) npc.facing = d[0];
     }
     npc.x += npc.vx;
     npc.y += npc.vy;
@@ -402,6 +428,7 @@ function atualizarZumbis() {
       z.vx = (dx / dist) * z.speed;
       z.vy = (dy / dist) * z.speed;
       z.isMoving = true;
+      z.facing = dx >= 0 ? 1 : -1;
       isBeingChased = true;
     } else {
       z.patrolTimer++;
@@ -412,6 +439,7 @@ function atualizarZumbis() {
           z.vx = Math.cos(ang) * (z.speed * 0.5);
           z.vy = Math.sin(ang) * (z.speed * 0.5);
           z.isMoving = true;
+          z.facing = z.vx >= 0 ? 1 : -1;
         } else {
           z.vx = 0;
           z.vy = 0;
@@ -431,7 +459,6 @@ function verificarInteracoes() {
   activeTower = null;
   const prompt = document.getElementById('interaction-prompt');
 
-  // 1. Verificar proximidade com Torres de Sinal
   for (let t of towers) {
     if (t.activated) continue;
     const dist = Math.hypot((player.x + player.width/2) - (t.x + t.width/2), (player.y + player.height/2) - (t.y + t.height/2));
@@ -443,7 +470,6 @@ function verificarInteracoes() {
     }
   }
 
-  // 2. Verificar proximidade com NPCs
   for (let npc of npcs) {
     const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
     if (dist < 50 && !npc.solved) {
@@ -454,7 +480,6 @@ function verificarInteracoes() {
     }
   }
 
-  // 3. Verificar proximidade com Itens no Chão
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
@@ -469,14 +494,13 @@ function verificarInteracoes() {
   prompt.style.display = 'none';
 }
 
-// LÓGICA DE ATIVAÇÃO DAS 3 TORRES DE SATÉLITE
 function atualizarAtivacaoTorre() {
   const progBox = document.getElementById('tower-progress-box');
   const progFill = document.getElementById('tower-progress-fill');
 
   if (activeTower && (keys['e'] || keys[' '])) {
     progBox.style.display = 'block';
-    activeTower.progress += 0.7; // Leva ~2.5 segundos segurando [E]
+    activeTower.progress += 0.7;
     progFill.style.width = Math.min(100, activeTower.progress) + '%';
 
     if (animFrame % 12 === 0) {
@@ -594,14 +618,229 @@ function fecharDialogo() {
   document.getElementById('dialog-box').style.display = 'none';
 }
 
+// ==========================================
+// EFEITO DE FOGO ANIMADO E FUMAÇA
+// ==========================================
+function desenharFogoAnimado(fx, fy, escala = 1) {
+  const flicker1 = Math.sin(animFrame * 0.35 + fx) * 3 * escala;
+  const flicker2 = Math.cos(animFrame * 0.45 + fy) * 2.5 * escala;
+
+  // 1. Halo de luz quente no solo
+  const glow = ctx.createRadialGradient(fx, fy, 2, fx, fy, 36 * escala);
+  glow.addColorStop(0, 'rgba(255, 130, 0, 0.42)');
+  glow.addColorStop(1, 'rgba(255, 50, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(fx, fy, 36 * escala, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Partículas de fumaça subindo
+  for (let i = 0; i < 3; i++) {
+    const progress = ((animFrame * 0.8 + i * 22 + fx) % 60) / 60;
+    const smokeY = fy - 12 * escala - progress * 35 * escala;
+    const smokeX = fx + Math.sin(progress * 5 + i) * 6 * escala;
+    const smokeRadius = (4 + progress * 8) * escala;
+
+    ctx.fillStyle = `rgba(35, 30, 28, ${(1 - progress) * 0.45})`;
+    ctx.beginPath();
+    ctx.arc(smokeX, smokeY, smokeRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 3. Chama externa (Vermelho-Laranja)
+  ctx.fillStyle = '#ff3b00';
+  ctx.beginPath();
+  ctx.moveTo(fx - 10 * escala, fy + 2);
+  ctx.quadraticCurveTo(fx - 12 * escala, fy - 12 * escala, fx + flicker1, fy - 24 * escala);
+  ctx.quadraticCurveTo(fx + 12 * escala, fy - 12 * escala, fx + 10 * escala, fy + 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // 4. Chama média (Laranja brilhante)
+  ctx.fillStyle = '#ff9100';
+  ctx.beginPath();
+  ctx.moveTo(fx - 6.5 * escala, fy + 2);
+  ctx.quadraticCurveTo(fx - 7 * escala, fy - 8 * escala, fx + flicker2, fy - 17 * escala);
+  ctx.quadraticCurveTo(fx + 7 * escala, fy - 8 * escala, fx + 6.5 * escala, fy + 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. Núcleo da chama (Amarelo claro)
+  ctx.fillStyle = '#fff066';
+  ctx.beginPath();
+  ctx.arc(fx, fy - 3 * escala, 3.5 * escala, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ==========================================
+// CONSTRUÇÕES QUEBRADAS E CARROS DESTRUÍDOS
+// ==========================================
+function desenharConstrucaoQuebrada(r) {
+  const rx = r.x - camera.x;
+  const ry = r.y - camera.y;
+
+  if (rx < -200 || rx > canvas.width + 200 || ry < -200 || ry > canvas.height + 200) return;
+
+  // Sombra projetada
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(rx + 8, ry + 10, r.w, r.h);
+
+  // Pedras e entulho espalhados
+  ctx.fillStyle = '#3b2e26';
+  ctx.fillRect(rx - 8, ry + r.h - 10, 14, 10);
+  ctx.fillRect(rx + r.w - 6, ry - 6, 12, 9);
+  ctx.fillStyle = '#524136';
+  ctx.fillRect(rx + r.w + 4, ry + r.h - 18, 9, 8);
+  ctx.fillRect(rx - 10, ry + 14, 8, 8);
+
+  // Piso interno
+  ctx.fillStyle = '#251d18';
+  ctx.fillRect(rx, ry, r.w, r.h);
+
+  // Paredes quebradas
+  ctx.fillStyle = r.type === 'building' ? '#4a3b32' : '#573c2c';
+  ctx.beginPath();
+  ctx.moveTo(rx, ry + 12);
+  ctx.lineTo(rx + 18, ry);
+  ctx.lineTo(rx + r.w * 0.45, ry + 8);
+  ctx.lineTo(rx + r.w * 0.65, ry);
+  ctx.lineTo(rx + r.w, ry + 14);
+  ctx.lineTo(rx + r.w - 6, ry + r.h * 0.5);
+  ctx.lineTo(rx + r.w, ry + r.h - 8);
+  ctx.lineTo(rx + r.w * 0.7, ry + r.h);
+  ctx.lineTo(rx + r.w * 0.35, ry + r.h - 10);
+  ctx.lineTo(rx, ry + r.h);
+  ctx.lineTo(rx + 7, ry + r.h * 0.55);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = '#1f1713';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Interior desabado
+  ctx.fillStyle = '#140f0c';
+  ctx.beginPath();
+  ctx.moveTo(rx + 16, ry + 18);
+  ctx.lineTo(rx + r.w - 22, ry + 16);
+  ctx.lineTo(rx + r.w - 16, ry + r.h - 20);
+  ctx.lineTo(rx + 22, ry + r.h - 16);
+  ctx.closePath();
+  ctx.fill();
+
+  // Vigas enferrujadas
+  ctx.strokeStyle = '#7a3b1e';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(rx + 12, ry + r.h - 14);
+  ctx.lineTo(rx + r.w - 15, ry + 14);
+  ctx.moveTo(rx + 25, ry + 12);
+  ctx.lineTo(rx + r.w * 0.65, ry + r.h - 12);
+  ctx.stroke();
+
+  // Janelas quebradas
+  ctx.fillStyle = '#120d0a';
+  ctx.fillRect(rx + 14, ry + r.h - 22, 16, 12);
+  if (r.w > 110) {
+    ctx.fillRect(rx + r.w - 34, ry + r.h - 22, 16, 12);
+  }
+
+  // Fogo queimando na ruína
+  if (r.onFire) {
+    desenharFogoAnimado(rx + r.w * 0.45, ry + r.h * 0.45, 1.15);
+    if (r.w > 110) {
+      desenharFogoAnimado(rx + r.w * 0.72, ry + r.h * 0.65, 0.85);
+    }
+  }
+}
+
+function desenharCarroDestruido(c) {
+  const cx = c.x - camera.x;
+  const cy = c.y - camera.y;
+
+  if (cx < -150 || cx > canvas.width + 150 || cy < -150 || cy > canvas.height + 150) return;
+
+  // 1. Sombra no asfalto/terra
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.beginPath();
+  ctx.ellipse(cx + c.w / 2, cy + c.h + 2, c.w * 0.52, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Peças e estilhaços de vidro no chão ao redor
+  ctx.fillStyle = 'rgba(160, 210, 230, 0.35)';
+  ctx.fillRect(cx + 12, cy + c.h + 4, 4, 3);
+  ctx.fillRect(cx + c.w - 18, cy - 4, 5, 3);
+  ctx.fillStyle = '#2b2420';
+  ctx.fillRect(cx - 5, cy + c.h - 4, 8, 5);
+
+  // 3. Pneus furados / faltando
+  ctx.fillStyle = '#141414';
+  ctx.beginPath();
+  ctx.arc(cx + 14, cy + c.h, 7, 0, Math.PI * 2); // Roda traseira/dianteira
+  ctx.fill();
+  // Aro enferrujado sem pneu na outra ponta
+  ctx.fillStyle = '#5c3422';
+  ctx.beginPath();
+  ctx.arc(cx + c.w - 14, cy + c.h + 1, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Lataria principal amassada e enferrujada
+  ctx.fillStyle = c.color;
+  ctx.strokeStyle = '#1a1412';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(cx, cy + 10, c.w, c.h - 10, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // 5. Cabine / Teto amassado com vidros estilhaçados
+  ctx.fillStyle = '#26211e';
+  ctx.beginPath();
+  ctx.moveTo(cx + 14, cy + 10);
+  ctx.lineTo(cx + 22, cy);
+  ctx.lineTo(cx + c.w - 22, cy + 2);
+  ctx.lineTo(cx + c.w - 14, cy + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Janelas quebradas (frestas escuras)
+  ctx.fillStyle = '#0d0b0a';
+  ctx.fillRect(cx + 22, cy + 3, 12, 6);
+  ctx.fillRect(cx + 37, cy + 3, 12, 6);
+
+  // 6. Capô amassado e marcas de ferrugem
+  ctx.fillStyle = 'rgba(130, 55, 25, 0.55)';
+  ctx.fillRect(cx + 6, cy + 14, 16, 8);
+  ctx.fillRect(cx + c.w - 22, cy + 15, 14, 7);
+
+  // 7. Fogo saindo do motor/capô se estiver queimando
+  if (c.onFire) {
+    const hoodX = c.dir === 1 ? cx + c.w - 14 : cx + 14;
+    desenharFogoAnimado(hoodX, cy + 12, 0.9);
+  }
+}
+
 function desenharCenario() {
   // Esconderijos
   for (let s of shelters) {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
 
-    ctx.fillStyle = '#2d1d16';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(sx + 6, sy + 6, s.width, s.height);
+
+    ctx.fillStyle = '#241b15';
     ctx.fillRect(sx, sy, s.width, s.height);
+
+    ctx.strokeStyle = '#3d2e24';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx + 10, sy + 30);
+    ctx.lineTo(sx + s.width - 10, sy + 30);
+    ctx.moveTo(sx + 10, sy + s.height - 20);
+    ctx.lineTo(sx + s.width - 10, sy + s.height - 20);
+    ctx.stroke();
 
     ctx.strokeStyle = '#00ff88';
     ctx.lineWidth = 2;
@@ -609,38 +848,30 @@ function desenharCenario() {
 
     ctx.fillStyle = '#00ff88';
     ctx.font = '9px "Press Start 2P"';
-    ctx.fillText('ESCONDERIJO', sx + 8, sy + 18);
+    ctx.fillText('ABRIGO SEGURO', sx + 8, sy + 18);
   }
 
-  // Ruínas e Construções Quebradas
+  // Construções quebradas
   for (let r of ruins) {
-    const rx = r.x - camera.x;
-    const ry = r.y - camera.y;
-
-    ctx.fillStyle = '#3a281e';
-    ctx.fillRect(rx, ry, r.w, r.h);
-
-    ctx.strokeStyle = '#5a3f30';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(rx, ry, r.w, r.h);
-
-    ctx.fillStyle = '#18120e';
-    ctx.fillRect(rx + 10, ry + 10, r.w / 3, r.h / 3);
+    desenharConstrucaoQuebrada(r);
   }
 
-  // Torres de Transmissão (Objetivo)
+  // Carros destruídos
+  for (let c of wreckedCars) {
+    desenharCarroDestruido(c);
+  }
+
+  // Torres de Transmissão
   for (let t of towers) {
     const tx = t.x - camera.x;
     const ty = t.y - camera.y;
 
-    // Base da Torre
     ctx.fillStyle = '#2a2e35';
     ctx.fillRect(tx, ty + 20, t.width, 40);
     ctx.strokeStyle = t.activated ? '#00ff88' : '#ffcc00';
     ctx.lineWidth = 2;
     ctx.strokeRect(tx, ty + 20, t.width, 40);
 
-    // Antena metálica
     ctx.strokeStyle = '#8899aa';
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -648,14 +879,12 @@ function desenharCenario() {
     ctx.lineTo(tx + t.width / 2, ty - 15);
     ctx.stroke();
 
-    // Luz no topo (Vermelha piscando se desligada, Verde fixa se ligada)
     const blink = Math.floor(animFrame / 20) % 2 === 0;
     ctx.fillStyle = t.activated ? '#00ff88' : (blink ? '#ff0033' : '#660011');
     ctx.beginPath();
     ctx.arc(tx + t.width / 2, ty - 17, 5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Ondas de sinal se estiver ativa
     if (t.activated) {
       ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
       ctx.lineWidth = 1.5;
@@ -689,105 +918,279 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
 
-  if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) return;
+  if (screenX < -60 || screenX > canvas.width + 60 || screenY < -60 || screenY > canvas.height + 60) return;
 
-  const legOffset = isMoving ? Math.sin(animFrame * 0.25) * 4 : 0;
-  const armOffset = isMoving ? Math.cos(animFrame * 0.25) * 3 : 0;
+  const facing = char.facing || 1;
+  const cycle = animFrame * 0.24;
+  const legSwing = isMoving ? Math.sin(cycle) * 4.5 : 0;
+  const armSwing = isMoving ? Math.cos(cycle) * 4 : 0;
+  const bodyBob = isMoving ? Math.abs(Math.sin(cycle)) * 1.5 : 0;
 
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  const cx = screenX + 13;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.beginPath();
-  ctx.ellipse(screenX + 12, screenY + 34, 10, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, screenY + 38, 12, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = isZombie ? '#1c2618' : (char.pantsColor || '#111');
-  ctx.fillRect(screenX + 4, screenY + 22, 6, 12 + legOffset);
-  ctx.fillRect(screenX + 14, screenY + 22, 6, 12 - legOffset);
-
-  ctx.fillStyle = isZombie ? '#2e4226' : char.shirtColor;
-  ctx.fillRect(screenX + 3, screenY + 10, 18, 13);
-
-  ctx.fillStyle = isZombie ? '#3b5431' : char.shirtColor;
-  ctx.fillRect(screenX - 1, screenY + 11 + armOffset, 4, 10);
-  ctx.fillRect(screenX + 21, screenY + 11 - armOffset, 4, 10);
-
-  ctx.fillStyle = isZombie ? '#4d6e40' : char.skinColor;
-  ctx.fillRect(screenX + 4, screenY, 16, 11);
-
-  if (!isZombie) {
-    ctx.fillStyle = isNPC ? '#3a2518' : '#111';
-    ctx.fillRect(screenX + 4, screenY, 16, 3);
+  if (!isZombie && char.hasBackpack) {
+    const packX = facing === 1 ? cx - 12 : cx + 5;
+    ctx.fillStyle = '#3b3326';
+    ctx.strokeStyle = '#14110d';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(packX, screenY + 13 - bodyBob, 7, 13, 2);
+    ctx.fill();
+    ctx.stroke();
   }
 
-  ctx.fillStyle = isZombie ? '#ff0000' : '#000';
-  ctx.fillRect(screenX + 7, screenY + 4, 3, 3);
-  ctx.fillRect(screenX + 14, screenY + 4, 3, 3);
+  const pantsColor = isZombie ? '#232b20' : (char.pantsColor || '#1b222c');
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = '#0d0d0d';
+
+  ctx.fillStyle = pantsColor;
+  ctx.beginPath();
+  ctx.roundRect(cx - 7, screenY + 24 - bodyBob, 6, 11 + legSwing, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#141110';
+  ctx.fillRect(cx - 7.5, screenY + 33 + legSwing - bodyBob, 7, 4);
+
+  ctx.fillStyle = pantsColor;
+  ctx.beginPath();
+  ctx.roundRect(cx + 1, screenY + 24 - bodyBob, 6, 11 - legSwing, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#141110';
+  ctx.fillRect(cx + 0.5, screenY + 33 - legSwing - bodyBob, 7, 4);
+
+  ctx.fillStyle = isZombie ? '#4b6344' : char.skinColor;
+  ctx.beginPath();
+  ctx.roundRect(cx - 10, screenY + 14 - armSwing - bodyBob, 4, 11, 2);
+  ctx.fill();
+
+  const torsoOffset = isZombie ? facing * 1.5 : 0;
+  ctx.fillStyle = isZombie ? '#33422e' : char.shirtColor;
+  ctx.beginPath();
+  ctx.roundRect(cx - 8 + torsoOffset, screenY + 11 - bodyBob, 16, 15, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  if (!isZombie) {
+    ctx.fillStyle = char.isMedic ? '#ff2a4b' : 'rgba(0,0,0,0.28)';
+    ctx.fillRect(cx - 1, screenY + 12 - bodyBob, 2, 13);
+    if (char.isMedic) {
+      ctx.fillRect(cx - 3.5, screenY + 15 - bodyBob, 7, 2);
+    }
+  } else {
+    ctx.fillStyle = '#587350';
+    ctx.fillRect(cx - 4 + torsoOffset, screenY + 17 - bodyBob, 5, 3);
+  }
+
+  if (isZombie) {
+    ctx.fillStyle = '#587350';
+    ctx.beginPath();
+    const reachX = facing === 1 ? cx + 3 : cx - 14;
+    ctx.roundRect(reachX, screenY + 13 + (armSwing * 0.4) - bodyBob, 11, 4, 2);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = char.shirtColor;
+    ctx.beginPath();
+    ctx.roundRect(cx + 6, screenY + 13 + armSwing - bodyBob, 4.5, 9, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = char.skinColor;
+    ctx.beginPath();
+    ctx.arc(cx + 8.2, screenY + 23 + armSwing - bodyBob, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const headX = cx + (isZombie ? facing * 2 : 0);
+  const headY = screenY + 5 - bodyBob;
+
+  ctx.fillStyle = isZombie ? '#5d7a54' : char.skinColor;
+  ctx.beginPath();
+  ctx.arc(headX, headY, 7.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = isZombie ? '#242922' : (char.hairColor || '#1c1613');
+  ctx.beginPath();
+  ctx.arc(headX, headY - 1.5, 7.6, Math.PI, 0);
+  ctx.fill();
+
+  const eyeShift = facing * 2;
+  if (isZombie) {
+    ctx.fillStyle = '#ff1e38';
+    ctx.beginPath();
+    ctx.arc(headX - 2 + eyeShift, headY + 0.5, 1.6, 0, Math.PI * 2);
+    ctx.arc(headX + 2.5 + eyeShift, headY + 0.5, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(headX - 2.5 + eyeShift, headY - 0.5, 2, 2.2);
+    ctx.fillRect(headX + 1.5 + eyeShift, headY - 0.5, 2, 2.2);
+  }
 
   if (isNPC) {
+    const floatY = Math.sin(animFrame * 0.1) * 2;
     ctx.fillStyle = '#ffcc00';
-    ctx.font = '12px "Press Start 2P"';
-    ctx.fillText('!', screenX + 8, screenY - 6);
+    ctx.font = '11px "Press Start 2P"';
+    ctx.fillText('!', cx - 4, screenY - 8 + floatY);
   }
 }
 
+// ==========================================
+// MINIMAPA RADAR TÁTICO
+// ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
 
   const mw = miniCanvas.width;
   const mh = miniCanvas.height;
-  const scale = 0.042;
+  const scale = 0.055;
 
-  miniCtx.fillStyle = '#100c09';
+  const bgGrad = miniCtx.createRadialGradient(mw / 2, mh / 2, 10, mw / 2, mh / 2, mw * 0.7);
+  bgGrad.addColorStop(0, '#1a1410');
+  bgGrad.addColorStop(1, '#0a0806');
+  miniCtx.fillStyle = bgGrad;
   miniCtx.fillRect(0, 0, mw, mh);
 
   const cx = mw / 2;
   const cy = mh / 2;
 
-  // Esconderijos (Verde)
+  miniCtx.strokeStyle = 'rgba(255, 85, 0, 0.12)';
+  miniCtx.lineWidth = 1;
+  miniCtx.beginPath();
+  miniCtx.moveTo(cx, 0); miniCtx.lineTo(cx, mh);
+  miniCtx.moveTo(0, cy); miniCtx.lineTo(mw, cy);
+  miniCtx.stroke();
+
+  miniCtx.strokeStyle = 'rgba(255, 140, 50, 0.18)';
+  miniCtx.beginPath();
+  miniCtx.arc(cx, cy, 26, 0, Math.PI * 2);
+  miniCtx.arc(cx, cy, 52, 0, Math.PI * 2);
+  miniCtx.stroke();
+
+  const sweepAngle = (animFrame * 0.03) % (Math.PI * 2);
+  miniCtx.strokeStyle = 'rgba(0, 229, 255, 0.28)';
+  miniCtx.lineWidth = 1.5;
+  miniCtx.beginPath();
+  miniCtx.moveTo(cx, cy);
+  miniCtx.lineTo(cx + Math.cos(sweepAngle) * 62, cy + Math.sin(sweepAngle) * 62);
+  miniCtx.stroke();
+
+  // Construções quebradas no minimapa
+  miniCtx.fillStyle = 'rgba(130, 115, 105, 0.55)';
+  for (let r of ruins) {
+    const mx = cx + (r.x - player.x) * scale;
+    const my = cy + (r.y - player.y) * scale;
+    miniCtx.fillRect(mx, my, Math.max(3, r.w * scale), Math.max(3, r.h * scale));
+  }
+
+  // Carros destruídos no minimapa
+  miniCtx.fillStyle = 'rgba(180, 110, 75, 0.65)';
+  for (let c of wreckedCars) {
+    const mx = cx + (c.x - player.x) * scale;
+    const my = cy + (c.y - player.y) * scale;
+    miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
+  }
+
+  // Esconderijos
   for (let s of shelters) {
     const mx = cx + (s.x - player.x) * scale;
     const my = cy + (s.y - player.y) * scale;
-    miniCtx.fillStyle = '#00ff88';
-    miniCtx.fillRect(mx - 3, my - 3, 6, 6);
+    miniCtx.fillStyle = 'rgba(0, 255, 136, 0.35)';
+    miniCtx.fillRect(mx, my, s.width * scale, s.height * scale);
+    miniCtx.strokeStyle = '#00ff88';
+    miniCtx.lineWidth = 1;
+    miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
   }
 
-  // Torres de Transmissão (Amarelo se desligada, Ciano se ligada)
+  // Suprimentos
+  miniCtx.fillStyle = '#38bdf8';
+  for (let item of itemsOnGround) {
+    if (item.collected) continue;
+    const mx = cx + (item.x - player.x) * scale;
+    const my = cy + (item.y - player.y) * scale;
+    miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+  }
+
+  // Sobreviventes NPCs
+  miniCtx.fillStyle = '#ff8800';
+  for (let npc of npcs) {
+    if (npc.solved) continue;
+    const mx = cx + (npc.x - player.x) * scale;
+    const my = cy + (npc.y - player.y) * scale;
+    miniCtx.beginPath();
+    miniCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+
+  // Torres
   for (let t of towers) {
-    const mx = cx + (t.x - player.x) * scale;
-    const my = cy + (t.y - player.y) * scale;
+    let mx = cx + (t.x - player.x) * scale;
+    let my = cy + (t.y - player.y) * scale;
+    mx = Math.max(8, Math.min(mw - 8, mx));
+    my = Math.max(8, Math.min(mh - 8, my));
+
     miniCtx.fillStyle = t.activated ? '#00e5ff' : '#ffcc00';
     miniCtx.beginPath();
-    miniCtx.moveTo(mx, my - 4);
-    miniCtx.lineTo(mx + 4, my + 3);
-    miniCtx.lineTo(mx - 4, my + 3);
+    miniCtx.moveTo(mx, my - 4.5);
+    miniCtx.lineTo(mx + 4, my + 3.5);
+    miniCtx.lineTo(mx - 4, my + 3.5);
     miniCtx.closePath();
     miniCtx.fill();
   }
 
-  // Zumbis (Vermelho)
+  // Zumbis
+  const pulse = 2.5 + Math.sin(animFrame * 0.15) * 0.6;
   for (let z of zombies) {
     const mx = cx + (z.x - player.x) * scale;
     const my = cy + (z.y - player.y) * scale;
-    miniCtx.fillStyle = '#ff0033';
-    miniCtx.beginPath();
-    miniCtx.arc(mx, my, 3, 0, Math.PI * 2);
-    miniCtx.fill();
+    if (mx >= 0 && mx <= mw && my >= 0 && my <= mh) {
+      miniCtx.fillStyle = '#ff0033';
+      miniCtx.beginPath();
+      miniCtx.arc(mx, my, pulse, 0, Math.PI * 2);
+      miniCtx.fill();
+    }
   }
 
-  // Jogador (Azul no Centro)
+  // Cone de visão do jogador
+  miniCtx.fillStyle = 'rgba(0, 204, 255, 0.18)';
+  miniCtx.beginPath();
+  miniCtx.moveTo(cx, cy);
+  if (player.facing === 1) {
+    miniCtx.arc(cx, cy, 18, -0.45, 0.45);
+  } else {
+    miniCtx.arc(cx, cy, 18, Math.PI - 0.45, Math.PI + 0.45);
+  }
+  miniCtx.closePath();
+  miniCtx.fill();
+
+  // Jogador no centro
   miniCtx.fillStyle = '#00ccff';
   miniCtx.beginPath();
-  miniCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+  miniCtx.arc(cx, cy, 3.8, 0, Math.PI * 2);
   miniCtx.fill();
   miniCtx.strokeStyle = '#ffffff';
-  miniCtx.lineWidth = 1;
+  miniCtx.lineWidth = 1.2;
   miniCtx.stroke();
+
+  // Pontos cardeais
+  miniCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+  miniCtx.font = 'bold 8px Rajdhani, sans-serif';
+  miniCtx.fillText('N', cx - 3, 9);
+  miniCtx.fillText('S', cx - 3, mh - 3);
+  miniCtx.fillText('O', 3, cy + 3);
+  miniCtx.fillText('L', mw - 8, cy + 3);
 }
 
 function desenharIluminacaoEClima() {
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
 
-  // Se todas as torres forem ligadas, a luz expande
   const ligadas = towers.filter(t => t.activated).length;
   const outerRadius = 360 + ligadas * 60;
 
