@@ -1,17 +1,22 @@
 let canvas, ctx, miniCanvas, miniCtx;
 let playerName = "Sobrevivente";
 let lifeYears = 35;
-let supplies = 70;
+let hunger = 100;
+let thirst = 100;
 let activeNPC = null;
 let activeItem = null;
 let activeShip = null;
 let inDialog = false;
 let animFrame = 0;
 let agingTimer = 0;
+let hungerThirstTimer = 0;
 let flashDamage = 0;
 let isGameOver = false;
 let isVictory = false;
 let isLaunching = false;
+let playerBoardedShip = false;
+let shipLiftOffset = 0;
+let liftParticles = [];
 
 // ==========================================
 // SISTEMA DE ÁUDIO E EFEITOS SONOROS (WEB AUDIO API)
@@ -152,6 +157,14 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     osc.start(now);
     osc.stop(now + 0.12);
+  } else if (tipo === 'board_hatch') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.linearRampToValueAtTime(320, now + 0.22);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.start(now);
+    osc.stop(now + 0.25);
   } else if (tipo === 'damage') {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(110, now);
@@ -169,17 +182,17 @@ function tocarEfeitoSonoro(tipo) {
     osc.stop(now + 0.08);
   } else if (tipo === 'liftoff') {
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(90, now);
-    osc.frequency.exponentialRampToValueAtTime(720, now + 1.1);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    osc.frequency.setValueAtTime(85, now);
+    osc.frequency.exponentialRampToValueAtTime(680, now + 2.2);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
     osc.start(now);
-    osc.stop(now + 1.2);
+    osc.stop(now + 2.4);
   }
 }
 
 // ==========================================
-// CÂMERA, JOGADOR (BONECO MENINO COM ROUPA NOVA) E NAVE
+// CÂMERA, JOGADOR E NAVE
 // ==========================================
 const camera = { x: 0, y: 0 };
 
@@ -188,6 +201,7 @@ const player = {
   y: 900,
   width: 26,
   height: 40,
+  baseSpeed: 3.5,
   speed: 3.5,
   skinColor: '#ffdbac',
   shirtColor: '#2563eb',
@@ -195,8 +209,7 @@ const player = {
   hairColor: '#1f1610',
   hasBackpack: true,
   facing: 1,
-  isMoving: false,
-  inShelter: false
+  isMoving: false
 };
 
 const keys = {};
@@ -212,64 +225,48 @@ const escapeShip = {
   name: "Cápsula Orbital Aurora"
 };
 
-// ESCONDERIJOS (CÁPSULAS DE ESTASE QUE PAUSAM O ENVELHECIMENTO)
-const shelters = [
-  { x: 950, y: 700, width: 140, height: 110, name: "Abrigo de Estase A" },
-  { x: 1800, y: 1200, width: 160, height: 130, name: "Bunker de Estase B" },
-  { x: 400, y: 1500, width: 150, height: 120, name: "Abrigo de Estase C" }
-];
-
-// CONSTRUÇÕES EXPLORÁVEIS POR DENTRO
+// AS 3 CONSTRUÇÕES DAS PEÇAS DA NAVE
 const buildings = [
   {
-    x: 780, y: 1080, w: 170, h: 145,
+    x: 420, y: 1280, w: 175, h: 150,
     doorSide: 'bottom', doorPos: 65, doorWidth: 42,
     type: 'clinic', title: 'POSTO MÉDICO', onFire: true
   },
   {
-    x: 1480, y: 580, w: 185, h: 150,
-    doorSide: 'bottom', doorPos: 72, doorWidth: 44,
-    type: 'house', title: 'CASA ABANDONADA', onFire: false
-  },
-  {
-    x: 1280, y: 1450, w: 180, h: 150,
+    x: 1520, y: 1750, w: 185, h: 155,
     doorSide: 'top', doorPos: 68, doorWidth: 44,
-    type: 'warehouse', title: 'DEPÓSITO', onFire: true
+    type: 'warehouse', title: 'DEPÓSITO SUL', onFire: true
   },
   {
-    x: 880, y: 490, w: 165, h: 140,
-    doorSide: 'bottom', doorPos: 60, doorWidth: 42,
-    type: 'house', title: 'RESIDÊNCIA 04', onFire: false
-  },
-  {
-    x: 1620, y: 1020, w: 175, h: 145,
+    x: 2150, y: 820, w: 180, h: 150,
     doorSide: 'left', doorPos: 52, doorWidth: 42,
-    type: 'clinic', title: 'LABORATÓRIO', onFire: true
+    type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true
   }
 ];
 
-// CARROS DESTRUÍDOS PELO CAMINHO
+// POUCOS CARROS PELO CAMINHO
 const wreckedCars = [
-  { x: 1310, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
-  { x: 960, y: 940, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
-  { x: 1420, y: 1280, w: 74, h: 38, color: '#4f4632', onFire: true, dir: 1 },
-  { x: 720, y: 820, w: 70, h: 36, color: '#2f353b', onFire: true, dir: -1 },
-  { x: 1680, y: 760, w: 72, h: 36, color: '#593325', onFire: false, dir: 1 },
-  { x: 1040, y: 1340, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
+  { x: 1330, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
+  { x: 760, y: 1080, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
+  { x: 1740, y: 920, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// AS 3 PEÇAS ESSENCIAIS DA NAVE + SUPRIMENTOS DE TEMPO DE VIDA
+// ITENS NO CHÃO: 3 PEÇAS DA NAVE + COMIDAS E ÁGUAS PONTUAIS
 const itemsOnGround = [
   // 3 PEÇAS DA NAVE
-  { id: 101, x: 840, y: 1130, type: 'ship_part', partIcon: 'suit', name: 'Traje Criogênico (Posto Médico)', years: 4, supp: 10, collected: false },
-  { id: 102, x: 1710, y: 1085, type: 'ship_part', partIcon: 'chip', name: 'Chip de Navegação Estelar (Laboratório)', years: 4, supp: 10, collected: false },
-  { id: 103, x: 1360, y: 1525, type: 'ship_part', partIcon: 'fuel', name: 'Núcleo de Combustível (Depósito)', years: 4, supp: 10, collected: false },
+  { id: 101, x: 455, y: 1315, type: 'ship_part', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false },
+  { id: 102, x: 2295, y: 935, type: 'ship_part', label: 'Chip de Navegação', years: 4, hunger: 0, thirst: 0, collected: false },
+  { id: 103, x: 1670, y: 1865, type: 'ship_part', label: 'Núcleo de Combustível', years: 4, hunger: 0, thirst: 0, collected: false },
 
-  // SUPRIMENTOS PARA GANHAR MAIS TEMPO DE VIDA
-  { id: 1, x: 1150, y: 920, type: 'water', name: 'Cilindro de Oxigênio (+4 Anos)', years: 4, supp: 10, collected: false },
-  { id: 3, x: 1560, y: 635, type: 'food', name: 'Ração Espacial (+5 Anos)', years: 5, supp: 15, collected: false },
-  { id: 4, x: 1750, y: 1350, type: 'water', name: 'Água Purificada (+4 Anos)', years: 4, supp: 15, collected: false },
-  { id: 7, x: 940, y: 550, type: 'med', name: 'Soro Antienvelhecimento (+6 Anos)', years: 6, supp: 10, collected: false }
+  // ÁGUAS (MATAM A SEDE)
+  { id: 1, x: 1120, y: 950, type: 'water', label: 'Garrafa de Água', years: 2, hunger: 0, thirst: 45, collected: false },
+  { id: 2, x: 1820, y: 860, type: 'water', label: 'Cantil de Água Pura', years: 2, hunger: 0, thirst: 50, collected: false },
+  { id: 3, x: 1380, y: 1560, type: 'water', label: 'Galão de Água', years: 2, hunger: 0, thirst: 50, collected: false },
+
+  // COMIDAS (MATAM A FOME)
+  { id: 4, x: 680, y: 1180, type: 'food', label: 'Ração Enlatada', years: 2, hunger: 45, thirst: 0, collected: false },
+  { id: 5, x: 1640, y: 1380, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
+  { id: 6, x: 1940, y: 1020, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false }
 ];
 
 const npcs = [
@@ -290,18 +287,18 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "A nave Aurora precisa do Núcleo de Combustível no Depósito ao sul, do Chip no Laboratório e do Traje no Posto Médico. Cuidado: quando ligar os motores, o barulho vai atrair zumbis!",
+    dialog: "As 3 peças da nave estão nas construções ao sul, sudoeste e leste. Não deixe sua fome ou sede caírem demais, senão você fica lento!",
     options: [
-      { text: "Pegar o cilindro de oxigênio reserva que ele ofereceu.", years: 5, supp: 10, resp: "Respiraste ar puro! Ganhaste +5 anos de vida para buscar as peças." },
-      { text: "Agradecer pela dica e correr direto.", years: 2, supp: 0, resp: "Ganhaste +2 anos de fôlego com a orientação do engenheiro." }
+      { text: "Aceitar a água e a ração que ele guardou.", years: 3, hunger: 35, thirst: 35, resp: "Você se alimentou e recuperou energia para correr!" },
+      { text: "Agradecer pela informação e seguir rápido.", years: 2, hunger: 0, thirst: 0, resp: "Ganhaste +2 anos de fôlego com a dica do engenheiro." }
     ],
     solved: false
   },
   {
     id: 2,
     name: "Doutora Elena",
-    x: 990,
-    y: 1210,
+    x: 640,
+    y: 1390,
     width: 26,
     height: 40,
     skinColor: '#ffdbac',
@@ -314,21 +311,22 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "O Traje Criogênico está lá dentro do Posto Médico em chamas. Sem ele você não aguenta a pressão da decolagem!",
+    dialog: "O Traje Criogênico está dentro do Posto Médico aqui ao lado. Tenho um soro hidratante caso esteja exausto.",
     options: [
-      { text: "Aplicar dose rápida de estabilizador celular antes de entrar.", years: 6, supp: 15, resp: "Suas células se regeneraram! Ganhaste +6 anos de vida." },
-      { text: "Entrar sem tratamento para não perder segundos.", years: -3, supp: 0, resp: "A fumaça tóxica custou 3 anos do teu tempo de vida." }
+      { text: "Tomar o soro hidratante e energético.", years: 4, hunger: 25, thirst: 45, resp: "Hidratação restaurada! Sua velocidade voltou ao máximo." },
+      { text: "Entrar direto no Posto Médico.", years: -2, hunger: 0, thirst: 0, resp: "A fumaça desgastou um pouco sua saúde (-2 anos)." }
     ],
     solved: false
   }
 ];
 
 const zombies = [
-  { x: 1600, y: 900, width: 26, height: 40, speed: 0.7, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 900, y: 680, width: 26, height: 40, speed: 0.6, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1100, y: 1400, width: 26, height: 40, speed: 0.65, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 500, y: 900, width: 26, height: 40, speed: 0.55, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1850, y: 700, width: 26, height: 40, speed: 0.65, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+  { x: 1650, y: 880, width: 26, height: 40, speed: 1.05, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
+  { x: 820, y: 1120, width: 26, height: 40, speed: 0.98, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1380, y: 1560, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 540, y: 980, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 1960, y: 920, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
+  { x: 1520, y: 1320, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
 ];
 
 function redimensionarCanvas() {
@@ -359,7 +357,7 @@ function iniciarJogo() {
     const k = e.key.toLowerCase();
     keys[k] = true;
 
-    if (['e', ' '].includes(k) && !inDialog && !isGameOver && !isVictory) {
+    if (['e', ' '].includes(k) && !inDialog && !isGameOver && !isVictory && !playerBoardedShip) {
       if (activeNPC) abrirDialogo(activeNPC);
       else if (activeItem) coletarItem(activeItem);
     }
@@ -372,19 +370,24 @@ function iniciarJogo() {
 
 function reiniciarJogo() {
   lifeYears = 35;
-  supplies = 70;
+  hunger = 100;
+  thirst = 100;
   player.x = 1200;
   player.y = 900;
+  player.speed = player.baseSpeed;
   agingTimer = 0;
+  hungerThirstTimer = 0;
   isGameOver = false;
   isVictory = false;
   isLaunching = false;
+  playerBoardedShip = false;
+  shipLiftOffset = 0;
+  liftParticles = [];
   escapeShip.launched = false;
   escapeShip.progress = 0;
 
   atualizarSomMotorNave(false, 0);
-  atualizarHUDVida();
-  document.getElementById('supplies-val').innerText = supplies + '%';
+  atualizarHUDStatus();
   document.getElementById('parts-val').innerText = '0/3';
   document.getElementById('game-over-screen').style.display = 'none';
   document.getElementById('victory-screen').style.display = 'none';
@@ -395,10 +398,37 @@ function reiniciarJogo() {
   requestAnimationFrame(gameLoop);
 }
 
-function atualizarHUDVida() {
-  const el = document.getElementById('life-span');
-  el.innerText = lifeYears + ' Anos';
-  el.style.color = lifeYears <= 10 ? '#ff0033' : '#ffffff';
+function atualizarHUDStatus() {
+  const elLife = document.getElementById('life-span');
+  elLife.innerText = lifeYears + ' Anos';
+  elLife.style.color = lifeYears <= 10 ? '#ff0033' : '#ffffff';
+
+  const hVal = Math.round(hunger);
+  const tVal = Math.round(thirst);
+
+  document.getElementById('hunger-text').innerText = hVal + '%';
+  document.getElementById('hunger-bar').style.width = hVal + '%';
+  document.getElementById('hunger-bar').style.background = hVal <= 30 ? '#ff3333' : '#ff9900';
+
+  document.getElementById('thirst-text').innerText = tVal + '%';
+  document.getElementById('thirst-bar').style.width = tVal + '%';
+  document.getElementById('thirst-bar').style.background = tVal <= 30 ? '#ff3333' : '#00ccff';
+
+  let speedFactor = 1.0;
+  if (hunger <= 0 || thirst <= 0) {
+    speedFactor = 0.52;
+  } else if (hunger <= 30 && thirst <= 30) {
+    speedFactor = 0.65;
+  } else if (hunger <= 30 || thirst <= 30) {
+    speedFactor = 0.78;
+  }
+
+  player.speed = player.baseSpeed * speedFactor;
+
+  const slowBadge = document.getElementById('status-slow');
+  if (slowBadge) {
+    slowBadge.style.display = speedFactor < 1.0 ? 'inline-block' : 'none';
+  }
 }
 
 function gameLoop() {
@@ -406,10 +436,20 @@ function gameLoop() {
 
   animFrame++;
 
+  if (playerBoardedShip) {
+    atualizarAnimacaoDecolagem();
+    atualizarCamera();
+    desenhar();
+    desenharMinimapa();
+    if (!isVictory) {
+      requestAnimationFrame(gameLoop);
+    }
+    return;
+  }
+
   if (!inDialog) {
     atualizarJogador();
-    atualizarEsconderijo();
-    atualizarRelogioBiologico();
+    atualizarFomeSedeETempo();
     atualizarNPCs();
     atualizarZumbis();
     verificarInteracoes();
@@ -430,14 +470,51 @@ function gameLoop() {
   }
 }
 
-function atualizarRelogioBiologico() {
-  if (player.inShelter) return;
+function atualizarAnimacaoDecolagem() {
+  shipLiftOffset += 3.2;
+
+  for (let i = 0; i < 3; i++) {
+    liftParticles.push({
+      x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 44,
+      y: escapeShip.y + escapeShip.height - shipLiftOffset + 8,
+      vx: (Math.random() - 0.5) * 2.5,
+      vy: 1.5 + Math.random() * 2,
+      life: 35,
+      size: 10 + Math.random() * 14
+    });
+  }
+
+  for (let p of liftParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    p.size += 0.3;
+  }
+  liftParticles = liftParticles.filter(p => p.life > 0);
+
+  if (shipLiftOffset > 460 && !isVictory) {
+    isVictory = true;
+    document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salvo na Órbita!`;
+    document.getElementById('victory-screen').style.display = 'flex';
+  }
+}
+
+function atualizarFomeSedeETempo() {
+  hungerThirstTimer++;
+  const interval = player.isMoving ? 42 : 65;
+  if (hungerThirstTimer >= interval) {
+    hungerThirstTimer = 0;
+    hunger = Math.max(0, hunger - 1);
+    thirst = Math.max(0, thirst - 1.3);
+    atualizarHUDStatus();
+  }
 
   agingTimer++;
-  if (agingTimer >= 270) {
+  const yearInterval = (hunger <= 0 || thirst <= 0) ? 130 : 270;
+  if (agingTimer >= yearInterval) {
     agingTimer = 0;
     lifeYears = Math.max(0, lifeYears - 1);
-    atualizarHUDVida();
+    atualizarHUDStatus();
     tocarEfeitoSonoro('tick_year');
   }
 }
@@ -445,7 +522,7 @@ function atualizarRelogioBiologico() {
 function atualizarSomTensao() {
   if (!audioEnabled || !audioCtx) return;
 
-  if ((isBeingChased && !player.inShelter) || lifeYears <= 10 || isLaunching) {
+  if (isBeingChased || lifeYears <= 10 || isLaunching) {
     heartbeatTimer++;
     const rate = isLaunching ? 24 : 38;
     if (heartbeatTimer >= rate) {
@@ -532,17 +609,6 @@ function checarColisaoObstaculos(nextX, nextY) {
 }
 
 function checarColisaoZumbi(nextX, nextY, z) {
-  for (let s of shelters) {
-    if (
-      nextX < s.x + s.width + 6 &&
-      nextX + z.width > s.x - 6 &&
-      nextY < s.y + s.height + 6 &&
-      nextY + z.height > s.y - 6
-    ) {
-      return true;
-    }
-  }
-
   for (let b of buildings) {
     if (
       nextX < b.x + b.w + 4 &&
@@ -583,7 +649,8 @@ function atualizarJogador() {
 
   if (player.isMoving) {
     stepSoundTimer++;
-    if (stepSoundTimer >= 16) {
+    const stepInterval = player.speed < player.baseSpeed ? 22 : 16;
+    if (stepSoundTimer >= stepInterval) {
       stepSoundTimer = 0;
       tocarEfeitoSonoro('step');
     }
@@ -595,22 +662,6 @@ function atualizarJogador() {
 function atualizarCamera() {
   camera.x = player.x + player.width / 2 - canvas.width / 2;
   camera.y = player.y + player.height / 2 - canvas.height / 2;
-}
-
-function atualizarEsconderijo() {
-  player.inShelter = false;
-  for (let s of shelters) {
-    if (
-      player.x > s.x && player.x < s.x + s.width &&
-      player.y > s.y && player.y < s.y + s.height
-    ) {
-      player.inShelter = true;
-      break;
-    }
-  }
-
-  const safeBadge = document.getElementById('status-safe');
-  if (safeBadge) safeBadge.style.display = player.inShelter ? 'inline-block' : 'none';
 }
 
 function atualizarNPCs() {
@@ -642,15 +693,15 @@ function atualizarZumbis() {
     }
   }
 
-  const detectionRadius = isLaunching ? 950 : 380;
+  const detectionRadius = isLaunching ? 1100 : 420;
 
   for (let z of zombies) {
     const dx = (player.x + player.width / 2) - (z.x + z.width / 2);
     const dy = (player.y + player.height / 2) - (z.y + z.height / 2);
     const dist = Math.hypot(dx, dy);
 
-    if (!player.inShelter && !playerInsideBuilding && dist < detectionRadius) {
-      const chaseSpeed = isLaunching ? z.speed * 1.25 : z.speed;
+    if (!playerInsideBuilding && dist < detectionRadius) {
+      const chaseSpeed = isLaunching ? z.speed * 1.3 : z.speed;
       z.vx = (dx / dist) * chaseSpeed;
       z.vy = (dy / dist) * chaseSpeed;
       z.isMoving = true;
@@ -721,11 +772,11 @@ function verificarInteracoes() {
     const parts = contarPecasColetadas();
     if (parts >= 3) {
       activeShip = escapeShip;
-      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para aquecer motores e DECOLAR!`;
+      prompt.innerHTML = `Segure <span class="key-highlight">[E]</span> para aquecer motores e ENTRAR NA NAVE!`;
       prompt.style.display = 'block';
       return;
     } else {
-      prompt.innerHTML = `Nave Incompleta: Colete as 3 Peças (${parts}/3) nas construções`;
+      prompt.innerHTML = `Nave Incompleta: Vasculhe as construções distantes (${parts}/3 Peças)`;
       prompt.style.display = 'block';
       return;
     }
@@ -744,9 +795,9 @@ function verificarInteracoes() {
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
-    if (dist < 38) {
+    if (dist < 42) {
       activeItem = item;
-      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.name}`;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.label}`;
       prompt.style.display = 'block';
       return;
     }
@@ -762,7 +813,7 @@ function atualizarDecolagemNave() {
   if (activeShip && (keys['e'] || keys[' '])) {
     isLaunching = true;
     progBox.style.display = 'block';
-    activeShip.progress += 0.55;
+    activeShip.progress += 0.5;
     progFill.style.width = Math.min(100, activeShip.progress) + '%';
 
     atualizarSomMotorNave(true, activeShip.progress);
@@ -773,19 +824,20 @@ function atualizarDecolagemNave() {
     if (activeShip.progress >= 100) {
       activeShip.launched = true;
       isLaunching = false;
+      playerBoardedShip = true;
       progBox.style.display = 'none';
+      document.getElementById('interaction-prompt').style.display = 'none';
       atualizarSomMotorNave(false, 0);
-      isVictory = true;
+      tocarEfeitoSonoro('board_hatch');
       tocarEfeitoSonoro('liftoff');
-      document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salvo na Órbita!`;
-      document.getElementById('victory-screen').style.display = 'flex';
+      mostrarPopupItem(`EMBARQUE CONCLUÍDO! DECOLANDO DA TERRA...`);
     }
   } else {
     isLaunching = false;
     progBox.style.display = 'none';
     atualizarSomMotorNave(false, 0);
     if (activeShip && !activeShip.launched) {
-      activeShip.progress = Math.max(0, activeShip.progress - 0.4);
+      activeShip.progress = Math.max(0, activeShip.progress - 0.35);
     }
   }
 }
@@ -793,23 +845,26 @@ function atualizarDecolagemNave() {
 function coletarItem(item) {
   item.collected = true;
   lifeYears = Math.min(100, lifeYears + item.years);
-  supplies = Math.min(100, supplies + item.supp);
+  hunger = Math.min(100, hunger + (item.hunger || 0));
+  thirst = Math.min(100, thirst + (item.thirst || 0));
 
-  atualizarHUDVida();
-  document.getElementById('supplies-val').innerText = supplies + '%';
+  atualizarHUDStatus();
 
   if (item.type === 'ship_part') {
     const parts = contarPecasColetadas();
     document.getElementById('parts-val').innerText = `${parts}/3`;
     tocarEfeitoSonoro('ship_part');
     if (parts === 3) {
-      mostrarPopupItem(`3/3 PEÇAS PRONTAS! Corra para a Nave Aurora!`);
+      mostrarPopupItem(`3/3 PEÇAS PRONTAS! Corra para entrar na Nave Aurora!`);
     } else {
-      mostrarPopupItem(`Peça da Nave (${parts}/3): ${item.name}!`);
+      mostrarPopupItem(`Peça da Nave (${parts}/3): ${item.label}!`);
     }
-  } else {
+  } else if (item.type === 'water') {
     tocarEfeitoSonoro('item');
-    mostrarPopupItem(`+${item.years} Anos de Vida: ${item.name}!`);
+    mostrarPopupItem(`Bebeu ${item.label} (+${item.thirst}% Sede)`);
+  } else if (item.type === 'food') {
+    tocarEfeitoSonoro('item');
+    mostrarPopupItem(`Comeu ${item.label} (+${item.hunger}% Fome)`);
   }
 
   activeItem = null;
@@ -819,18 +874,18 @@ function mostrarPopupItem(texto) {
   const pop = document.getElementById('item-popup');
   pop.innerText = texto;
   pop.style.display = 'block';
-  setTimeout(() => { pop.style.display = 'none'; }, 3000);
+  setTimeout(() => { pop.style.display = 'none'; }, 2800);
 }
 
 function verificarAtaqueZumbi() {
-  if (player.inShelter) return;
+  if (playerBoardedShip) return;
 
   for (let z of zombies) {
     const dist = Math.hypot((player.x + player.width/2) - (z.x + z.width/2), (player.y + player.height/2) - (z.y + z.height/2));
     if (dist < 22) {
       lifeYears = Math.max(0, lifeYears - 2);
       flashDamage = 6;
-      atualizarHUDVida();
+      atualizarHUDStatus();
       if (animFrame % 15 === 0) tocarEfeitoSonoro('damage');
     }
   }
@@ -868,10 +923,10 @@ function abrirDialogo(npc) {
 
 function responderNPC(npc, opcao) {
   lifeYears = Math.max(0, lifeYears + opcao.years);
-  supplies = Math.max(0, Math.min(100, supplies + opcao.supp));
+  hunger = Math.min(100, hunger + (opcao.hunger || 0));
+  thirst = Math.min(100, thirst + (opcao.thirst || 0));
 
-  atualizarHUDVida();
-  document.getElementById('supplies-val').innerText = supplies + '%';
+  atualizarHUDStatus();
 
   if (opcao.years > 0) tocarEfeitoSonoro('item');
   else tocarEfeitoSonoro('damage');
@@ -977,14 +1032,6 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
     ctx.strokeRect(bx + 16, by + 18, 22, 34);
-  } else if (b.type === 'house') {
-    ctx.fillStyle = '#4a2520';
-    ctx.fillRect(bx + b.w / 2 - 28, by + b.h / 2 - 18, 56, 36);
-
-    ctx.fillStyle = '#5c3d28';
-    ctx.fillRect(bx + 20, by + 20, 34, 22);
-    ctx.fillStyle = '#3d281a';
-    ctx.fillRect(bx + b.w - 44, by + 22, 24, 24);
   } else {
     ctx.fillStyle = '#6b492b';
     ctx.fillRect(bx + 18, by + 20, 26, 26);
@@ -996,14 +1043,6 @@ function desenharConstrucaoInterior(b) {
     ctx.arc(bx + b.w - 30, by + b.h - 32, 11, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  ctx.strokeStyle = '#14100d';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(bx + 35, by + b.h - 25);
-  ctx.lineTo(bx + 55, by + b.h - 42);
-  ctx.lineTo(bx + 70, by + b.h - 35);
-  ctx.stroke();
 
   const walls = obterParedesConstrucao(b);
   ctx.fillStyle = '#59463a';
@@ -1066,12 +1105,6 @@ function desenharCarroDestruido(c) {
   ctx.ellipse(cx + c.w / 2, cy + c.h + 2, c.w * 0.52, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(160, 210, 230, 0.35)';
-  ctx.fillRect(cx + 12, cy + c.h + 4, 4, 3);
-  ctx.fillRect(cx + c.w - 18, cy - 4, 5, 3);
-  ctx.fillStyle = '#2b2420';
-  ctx.fillRect(cx - 5, cy + c.h - 4, 8, 5);
-
   ctx.fillStyle = '#141414';
   ctx.beginPath();
   ctx.arc(cx + 14, cy + c.h, 7, 0, Math.PI * 2);
@@ -1100,14 +1133,6 @@ function desenharCarroDestruido(c) {
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = '#0d0b0a';
-  ctx.fillRect(cx + 22, cy + 3, 12, 6);
-  ctx.fillRect(cx + 37, cy + 3, 12, 6);
-
-  ctx.fillStyle = 'rgba(130, 55, 25, 0.55)';
-  ctx.fillRect(cx + 6, cy + 14, 16, 8);
-  ctx.fillRect(cx + c.w - 22, cy + 15, 14, 7);
-
   if (c.onFire) {
     const hoodX = c.dir === 1 ? cx + c.w - 14 : cx + 14;
     desenharFogoAnimado(hoodX, cy + 12, 0.9);
@@ -1133,14 +1158,23 @@ function desenharNaveEspacial() {
     ctx.fillRect(sx + i, sy + escapeShip.height + 4, 8, 5);
   }
 
-  const shakeX = isLaunching ? (Math.random() - 0.5) * 4 : 0;
+  for (let p of liftParticles) {
+    ctx.fillStyle = `rgba(220, 220, 220, ${(p.life / 35) * 0.45})`;
+    ctx.beginPath();
+    ctx.arc(p.x - camera.x, p.y - camera.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const shipY = sy - shipLiftOffset;
+  const shakeX = (isLaunching || playerBoardedShip) ? (Math.random() - 0.5) * 4.5 : 0;
   const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
   const cx = sx + escapeShip.width / 2 + shakeX;
-  const cy = sy + escapeShip.height / 2 + shakeY;
+  const cy = shipY + escapeShip.height / 2 + shakeY;
 
-  if (isLaunching) {
-    desenharFogoAnimado(cx - 18, sy + escapeShip.height + 6, 1.1);
-    desenharFogoAnimado(cx + 18, sy + escapeShip.height + 6, 1.1);
+  if (isLaunching || playerBoardedShip) {
+    const scaleFlame = playerBoardedShip ? 1.5 : 1.1;
+    desenharFogoAnimado(cx - 18, shipY + escapeShip.height + 6, scaleFlame);
+    desenharFogoAnimado(cx + 18, shipY + escapeShip.height + 6, scaleFlame);
   }
 
   ctx.fillStyle = '#b91c1c';
@@ -1193,6 +1227,17 @@ function desenharNaveEspacial() {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
+  if (playerBoardedShip) {
+    ctx.fillStyle = '#ffdbac';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 7, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1f1610';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 8, 4.6, Math.PI, 0);
+    ctx.fill();
+  }
+
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
   ctx.beginPath();
   ctx.arc(cx - 3, cy - 11, 3, 0, Math.PI * 2);
@@ -1205,31 +1250,14 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
-  ctx.font = '8px "Press Start 2P"';
-  ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
+  if (!playerBoardedShip) {
+    ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
+    ctx.font = '8px "Press Start 2P"';
+    ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
+  }
 }
 
 function desenharCenario() {
-  for (let s of shelters) {
-    const sx = s.x - camera.x;
-    const sy = s.y - camera.y;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(sx + 6, sy + 6, s.width, s.height);
-
-    ctx.fillStyle = '#132421';
-    ctx.fillRect(sx, sy, s.width, s.height);
-
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx, sy, s.width, s.height);
-
-    ctx.fillStyle = '#00ff88';
-    ctx.font = '8px "Press Start 2P"';
-    ctx.fillText('ABRIGO DE ESTASE', sx + 8, sy + 18);
-  }
-
   for (let b of buildings) {
     desenharConstrucaoInterior(b);
   }
@@ -1241,13 +1269,18 @@ function desenharCenario() {
   desenharNaveEspacial();
 }
 
+// ==========================================
+// ITENS NO CHÃO + BARRINHA FLUTUANTE COM O NOME AO ACHAR
+// ==========================================
 function desenharItemChao(item) {
   if (item.collected) return;
   const screenX = item.x - camera.x;
   const screenY = item.y - camera.y;
 
+  if (screenX < -120 || screenX > canvas.width + 120 || screenY < -120 || screenY > canvas.height + 120) return;
+
   if (item.type === 'ship_part') {
-    const glow = 14 + Math.sin(animFrame * 0.15) * 3;
+    const glow = 13 + Math.sin(animFrame * 0.15) * 3;
     ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
     ctx.beginPath();
     ctx.arc(screenX, screenY, glow, 0, Math.PI * 2);
@@ -1264,19 +1297,62 @@ function desenharItemChao(item) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-  } else {
-    ctx.fillStyle = item.type === 'water' ? 'rgba(0, 200, 255, 0.5)' : 'rgba(255, 200, 0, 0.5)';
+  } else if (item.type === 'water') {
+    ctx.fillStyle = 'rgba(0, 204, 255, 0.35)';
     ctx.beginPath();
     ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
     ctx.fill();
 
-    if (item.type === 'water') {
-      ctx.fillStyle = '#00ccff';
-      ctx.fillRect(screenX - 3, screenY - 6, 6, 12);
-    } else {
-      ctx.fillStyle = '#ff9900';
-      ctx.fillRect(screenX - 5, screenY - 5, 10, 10);
-    }
+    ctx.fillStyle = '#00ccff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(screenX - 4, screenY - 6, 8, 12, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(screenX - 2, screenY - 8, 4, 2);
+  } else {
+    ctx.fillStyle = 'rgba(255, 153, 0, 0.35)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff9900';
+    ctx.strokeStyle = '#fff5e6';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(screenX - 6, screenY - 5, 12, 10, 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  const distToPlayer = Math.hypot((player.x + player.width / 2) - item.x, (player.y + player.height / 2) - item.y);
+  if (distToPlayer < 165) {
+    ctx.font = 'bold 11px Rajdhani, sans-serif';
+    const textWidth = ctx.measureText(item.label).width;
+    const tagW = textWidth + 16;
+    const tagH = 20;
+    const tagX = screenX - tagW / 2;
+    const tagY = screenY - 30;
+
+    let accentColor = '#00e5ff';
+    if (item.type === 'water') accentColor = '#00ccff';
+    else if (item.type === 'food') accentColor = '#ff9900';
+
+    ctx.fillStyle = 'rgba(14, 10, 8, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(tagX, tagY, tagW, tagH, 4);
+    ctx.fill();
+
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.label, screenX, tagY + 14);
+    ctx.textAlign = 'left';
   }
 }
 
@@ -1441,14 +1517,14 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
 }
 
 // ==========================================
-// MINIMAPA RADAR DA PLATAFORMA
+// MINIMAPA NO CANTO SUPERIOR DIREITO
 // ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
 
   const mw = miniCanvas.width;
   const mh = miniCanvas.height;
-  const scale = 0.055;
+  const scale = 0.042;
 
   const bgGrad = miniCtx.createRadialGradient(mw / 2, mh / 2, 10, mw / 2, mh / 2, mw * 0.7);
   bgGrad.addColorStop(0, '#1a1410');
@@ -1494,34 +1570,23 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
   }
 
-  for (let s of shelters) {
-    const mx = cx + (s.x - player.x) * scale;
-    const my = cy + (s.y - player.y) * scale;
-    miniCtx.fillStyle = 'rgba(0, 255, 136, 0.35)';
-    miniCtx.fillRect(mx, my, s.width * scale, s.height * scale);
-    miniCtx.strokeStyle = '#00ff88';
-    miniCtx.lineWidth = 1;
-    miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
-  }
-
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     let mx = cx + (item.x - player.x) * scale;
     let my = cy + (item.y - player.y) * scale;
 
     if (item.type === 'ship_part') {
-      mx = Math.max(8, Math.min(mw - 8, mx));
-      my = Math.max(8, Math.min(mh - 8, my));
-      miniCtx.fillStyle = '#00e5ff';
+      mx = Math.max(12, Math.min(mw - 12, mx));
+      my = Math.max(12, Math.min(mh - 12, my));
+      miniCtx.strokeStyle = 'rgba(0, 229, 255, 0.75)';
+      miniCtx.lineWidth = 1.2;
+      miniCtx.setLineDash([2, 2]);
       miniCtx.beginPath();
-      miniCtx.moveTo(mx, my - 4);
-      miniCtx.lineTo(mx + 3.5, my);
-      miniCtx.lineTo(mx, my + 4);
-      miniCtx.lineTo(mx - 3.5, my);
-      miniCtx.closePath();
-      miniCtx.fill();
+      miniCtx.arc(mx, my, 9 + Math.sin(animFrame * 0.1) * 2, 0, Math.PI * 2);
+      miniCtx.stroke();
+      miniCtx.setLineDash([]);
     } else {
-      miniCtx.fillStyle = '#38bdf8';
+      miniCtx.fillStyle = item.type === 'water' ? '#00ccff' : '#ff9900';
       miniCtx.fillRect(mx - 1.5, my - 1.5, 3, 3);
     }
   }
@@ -1638,7 +1703,9 @@ function desenhar() {
     desenharPersonagemDetalhado(z.x, z.y, z, z.isMoving, true, false);
   }
 
-  desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
+  if (!playerBoardedShip) {
+    desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
+  }
 
   desenharTetosConstrucoes();
 

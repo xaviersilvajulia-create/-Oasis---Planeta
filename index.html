@@ -9,7 +9,7 @@
 </head>
 <body>
 
-  <!-- TELA INICIAL (ORIGINAL RESTAURADA) -->
+  <!-- TELA INICIAL -->
   <div id="login-screen" class="overlay-screen">
     <div class="login-box">
       <h1 class="game-title">OÁSIS DE SOBREVIVÊNCIA</h1>
@@ -24,7 +24,7 @@
       
       <div class="controls-hint">
         <span>[W A S D] Mover</span>
-        <span>[E] Pegar Peça / Falar / Ligar Nave</span>
+        <span>[E] Pegar Item / Falar / Ligar Nave</span>
       </div>
     </div>
   </div>
@@ -62,17 +62,32 @@
         <span class="hud-label">TEMPO DE VIDA</span>
         <span id="life-span" class="hud-value">35 Anos</span>
       </div>
-      <div class="hud-card">
-        <span class="hud-label">OXIGÊNIO / SUPR.</span>
-        <span id="supplies-val" class="hud-value">70%</span>
+
+      <!-- BARRA DE FOME -->
+      <div class="hud-card" style="border-left-color: #ff9900; min-width: 115px;">
+        <span class="hud-label">FOME <span id="hunger-text" style="color:#ff9900;">100%</span></span>
+        <div class="mini-stat-bar">
+          <div id="hunger-bar" class="mini-stat-fill" style="width: 100%; background: #ff9900;"></div>
+        </div>
       </div>
-      <div class="hud-card" style="border-left-color: #00e5ff;">
+
+      <!-- BARRA DE SEDE -->
+      <div class="hud-card" style="border-left-color: #00ccff; min-width: 115px;">
+        <span class="hud-label">SEDE <span id="thirst-text" style="color:#00ccff;">100%</span></span>
+        <div class="mini-stat-bar">
+          <div id="thirst-bar" class="mini-stat-fill" style="width: 100%; background: #00ccff;"></div>
+        </div>
+      </div>
+
+      <div class="hud-card" style="border-left-color: #00ff88;">
         <span class="hud-label">PEÇAS DA NAVE</span>
-        <span id="parts-val" class="hud-value" style="color: #00e5ff;">0/3</span>
+        <span id="parts-val" class="hud-value" style="color: #00ff88;">0/3</span>
       </div>
-      <div id="status-safe" class="hud-card safe-badge" style="display: none;">
-        ABRIGO DE ESTASE (TEMPO PAUSADO)
+
+      <div id="status-slow" class="hud-card slow-badge" style="display: none;">
+        EXAUSTO (LENTO)
       </div>
+
       <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
     </div>
 
@@ -82,7 +97,7 @@
       <canvas id="minimapCanvas" width="160" height="160"></canvas>
       <div class="minimap-legend">
         <span style="color:#00e5ff;">● Você</span>
-        <span style="color:#38bdf8;">◆ Peça</span>
+        <span style="color:#38bdf8;">○ Sinal</span>
         <span style="color:#ffcc00;">▲ Nave</span>
         <span style="color:#ff0033;">● Zumbi</span>
       </div>
