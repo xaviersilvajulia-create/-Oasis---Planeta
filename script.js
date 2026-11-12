@@ -1,5 +1,5 @@
 let canvas, ctx, miniCanvas, miniCtx;
-let playerName = "Piloto";
+let playerName = "Sobrevivente";
 let lifeYears = 35;
 let supplies = 70;
 let activeNPC = null;
@@ -32,7 +32,6 @@ function iniciarAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   audioCtx = new AudioContext();
 
-  // Ambiente tenso de fundo
   droneOsc1 = audioCtx.createOscillator();
   droneOsc2 = audioCtx.createOscillator();
   droneGain = audioCtx.createGain();
@@ -57,7 +56,6 @@ function iniciarAudio() {
   droneOsc1.start();
   droneOsc2.start();
 
-  // Oscilador contínuo dos propulsores da nave (silencioso até iniciar decolagem)
   engineOsc = audioCtx.createOscillator();
   engineGain = audioCtx.createGain();
   const engineFilter = audioCtx.createBiquadFilter();
@@ -92,7 +90,6 @@ function atualizarSomMotorNave(ativo, progresso) {
 
   const now = audioCtx.currentTime;
   if (ativo && audioEnabled) {
-    // O ronco do motor sobe de tom e volume conforme chega perto de 100%
     const freq = 45 + (progresso * 1.1);
     const vol = Math.min(0.24, 0.08 + (progresso / 100) * 0.16);
     engineOsc.frequency.setTargetAtTime(freq, now, 0.08);
@@ -138,7 +135,6 @@ function tocarEfeitoSonoro(tipo) {
     osc.start(now);
     osc.stop(now + 0.25);
   } else if (tipo === 'ship_part') {
-    // Som tecnológico de peça da nave acoplada
     osc.type = 'sine';
     osc.frequency.setValueAtTime(440, now);
     osc.frequency.setValueAtTime(554.37, now + 0.09);
@@ -149,7 +145,6 @@ function tocarEfeitoSonoro(tipo) {
     osc.start(now);
     osc.stop(now + 0.42);
   } else if (tipo === 'launch_alarm') {
-    // Bip de contagem regressiva da nave
     osc.type = 'square';
     osc.frequency.setValueAtTime(880, now);
     osc.frequency.setValueAtTime(660, now + 0.06);
@@ -173,7 +168,6 @@ function tocarEfeitoSonoro(tipo) {
     osc.start(now);
     osc.stop(now + 0.08);
   } else if (tipo === 'liftoff') {
-    // Som de decolagem subindo aos céus
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(90, now);
     osc.frequency.exponentialRampToValueAtTime(720, now + 1.1);
@@ -185,7 +179,7 @@ function tocarEfeitoSonoro(tipo) {
 }
 
 // ==========================================
-// CÂMERA, JOGADOR (BONECA DE ROSA) E NAVE
+// CÂMERA, JOGADOR (BONECO MENINO COM ROUPA NOVA) E NAVE
 // ==========================================
 const camera = { x: 0, y: 0 };
 
@@ -195,13 +189,11 @@ const player = {
   width: 26,
   height: 40,
   speed: 3.5,
-  isDoll: true,
-  skinColor: '#ffe0d6',
-  dressColor: '#ff69b4',
-  ribbonColor: '#ffb6c1',
-  shoeColor: '#d61c77',
-  hairColor: '#f7d060',
-  hasBackpack: false,
+  skinColor: '#ffdbac',
+  shirtColor: '#2563eb',
+  pantsColor: '#28362b',
+  hairColor: '#1f1610',
+  hasBackpack: true,
   facing: 1,
   isMoving: false,
   inShelter: false
@@ -650,7 +642,6 @@ function atualizarZumbis() {
     }
   }
 
-  // Se a nave estiver aquecendo os motores, o barulho atrai zumbis de longe (raio de 900px)
   const detectionRadius = isLaunching ? 950 : 380;
 
   for (let z of zombies) {
@@ -722,7 +713,6 @@ function verificarInteracoes() {
   activeShip = null;
   const prompt = document.getElementById('interaction-prompt');
 
-  // 1. Interação com a Nave Espacial
   const distShip = Math.hypot(
     (player.x + player.width / 2) - (escapeShip.x + escapeShip.width / 2),
     (player.y + player.height / 2) - (escapeShip.y + escapeShip.height / 2)
@@ -741,7 +731,6 @@ function verificarInteracoes() {
     }
   }
 
-  // 2. Interação com Sobreviventes (NPCs)
   for (let npc of npcs) {
     const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
     if (dist < 50 && !npc.solved) {
@@ -752,7 +741,6 @@ function verificarInteracoes() {
     }
   }
 
-  // 3. Interação com Peças da Nave e Itens
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
@@ -777,7 +765,6 @@ function atualizarDecolagemNave() {
     activeShip.progress += 0.55;
     progFill.style.width = Math.min(100, activeShip.progress) + '%';
 
-    // Som contínuo dos propulsores aquecendo + alarme de contagem regressiva
     atualizarSomMotorNave(true, activeShip.progress);
     if (animFrame % 24 === 0) {
       tocarEfeitoSonoro('launch_alarm');
@@ -790,7 +777,7 @@ function atualizarDecolagemNave() {
       atualizarSomMotorNave(false, 0);
       isVictory = true;
       tocarEfeitoSonoro('liftoff');
-      document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salva na Órbita!`;
+      document.getElementById('victory-stats').innerText = `Tempo Restante na Terra: ${lifeYears} Anos → Salvo na Órbita!`;
       document.getElementById('victory-screen').style.display = 'flex';
     }
   } else {
@@ -1135,32 +1122,27 @@ function desenharNaveEspacial() {
   const sy = escapeShip.y - camera.y;
   const parts = contarPecasColetadas();
 
-  // Base da plataforma de lançamento
   ctx.fillStyle = '#1e242b';
   ctx.fillRect(sx - 12, sy + 10, escapeShip.width + 24, escapeShip.height);
   ctx.strokeStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
   ctx.lineWidth = 2;
   ctx.strokeRect(sx - 12, sy + 10, escapeShip.width + 24, escapeShip.height);
 
-  // Faixas de segurança amarelas e pretas na base
   ctx.fillStyle = '#ffcc00';
   for (let i = -8; i < escapeShip.width + 12; i += 16) {
     ctx.fillRect(sx + i, sy + escapeShip.height + 4, 8, 5);
   }
 
-  // Vibração da nave quando os motores estão aquecendo
   const shakeX = isLaunching ? (Math.random() - 0.5) * 4 : 0;
   const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
   const cx = sx + escapeShip.width / 2 + shakeX;
   const cy = sy + escapeShip.height / 2 + shakeY;
 
-  // Chamas e fumaça dos propulsores durante aquecimento
   if (isLaunching) {
     desenharFogoAnimado(cx - 18, sy + escapeShip.height + 6, 1.1);
     desenharFogoAnimado(cx + 18, sy + escapeShip.height + 6, 1.1);
   }
 
-  // Asas laterais da nave
   ctx.fillStyle = '#b91c1c';
   ctx.strokeStyle = '#0f172a';
   ctx.lineWidth = 2;
@@ -1180,12 +1162,10 @@ function desenharNaveEspacial() {
   ctx.fill();
   ctx.stroke();
 
-  // Propulsores inferiores
   ctx.fillStyle = '#334155';
   ctx.fillRect(cx - 20, cy + 36, 12, 10);
   ctx.fillRect(cx + 8, cy + 36, 12, 10);
 
-  // Fuselagem principal da nave (branca/prateada com detalhes rosa)
   ctx.fillStyle = '#f1f5f9';
   ctx.beginPath();
   ctx.moveTo(cx, cy - 48);
@@ -1196,8 +1176,7 @@ function desenharNaveEspacial() {
   ctx.fill();
   ctx.stroke();
 
-  // Bico da nave
-  ctx.fillStyle = '#ff69b4';
+  ctx.fillStyle = '#2563eb';
   ctx.beginPath();
   ctx.moveTo(cx, cy - 48);
   ctx.quadraticCurveTo(cx + 11, cy - 32, cx + 12, cy - 26);
@@ -1206,7 +1185,6 @@ function desenharNaveEspacial() {
   ctx.closePath();
   ctx.fill();
 
-  // Janela redonda da cabine
   ctx.fillStyle = '#0ea5e9';
   ctx.beginPath();
   ctx.arc(cx, cy - 8, 10, 0, Math.PI * 2);
@@ -1215,13 +1193,11 @@ function desenharNaveEspacial() {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  // Reflexo no vidro da janela
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
   ctx.beginPath();
   ctx.arc(cx - 3, cy - 11, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // 3 Luzes indicadoras das peças coletadas no casco da nave
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = i < parts ? '#00ff88' : '#ef4444';
     ctx.beginPath();
@@ -1229,14 +1205,12 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  // Texto de status acima da nave
   ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
   ctx.font = '8px "Press Start 2P"';
   ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
 }
 
 function desenharCenario() {
-  // Abrigos de Estase
   for (let s of shelters) {
     const sx = s.x - camera.x;
     const sy = s.y - camera.y;
@@ -1273,7 +1247,6 @@ function desenharItemChao(item) {
   const screenY = item.y - camera.y;
 
   if (item.type === 'ship_part') {
-    // Peça da nave com aura ciano pulsante
     const glow = 14 + Math.sin(animFrame * 0.15) * 3;
     ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
     ctx.beginPath();
@@ -1308,143 +1281,13 @@ function desenharItemChao(item) {
 }
 
 // ==========================================
-// PERSONAGENS: BONECA DE ROSA, NPCs E ZUMBIS
+// PERSONAGENS: JOGADOR MENINO, NPCs E ZUMBIS
 // ==========================================
-function desenharBonecaRosa(screenX, screenY, char, isMoving) {
-  const facing = char.facing || 1;
-  const cycle = animFrame * 0.25;
-  const legSwing = isMoving ? Math.sin(cycle) * 4 : 0;
-  const armSwing = isMoving ? Math.cos(cycle) * 4 : 0;
-  const bodyBob = isMoving ? Math.abs(Math.sin(cycle)) * 1.8 : 0;
-  const cx = screenX + 13;
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.beginPath();
-  ctx.ellipse(cx, screenY + 38, 12, 4.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.lineWidth = 1.2;
-  ctx.strokeStyle = '#2d111e';
-
-  ctx.fillStyle = '#fff5f8';
-  ctx.beginPath();
-  ctx.roundRect(cx - 6, screenY + 26 - bodyBob, 5, 9 + legSwing, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = char.shoeColor || '#d61c77';
-  ctx.beginPath();
-  ctx.roundRect(cx - 6.5, screenY + 34 + legSwing - bodyBob, 6, 4.5, 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#fff5f8';
-  ctx.beginPath();
-  ctx.roundRect(cx + 1, screenY + 26 - bodyBob, 5, 9 - legSwing, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = char.shoeColor || '#d61c77';
-  ctx.beginPath();
-  ctx.roundRect(cx + 0.5, screenY + 34 - legSwing - bodyBob, 6, 4.5, 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = char.skinColor;
-  ctx.beginPath();
-  ctx.roundRect(cx - 9.5, screenY + 15 - armSwing - bodyBob, 3.8, 9, 2);
-  ctx.fill();
-  ctx.stroke();
-
-  const dressTop = screenY + 12 - bodyBob;
-  ctx.fillStyle = char.dressColor || '#ff69b4';
-  ctx.beginPath();
-  ctx.moveTo(cx - 6, dressTop);
-  ctx.lineTo(cx + 6, dressTop);
-  ctx.lineTo(cx + 11, dressTop + 16);
-  ctx.lineTo(cx - 11, dressTop + 16);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = char.ribbonColor || '#ffb6c1';
-  ctx.fillRect(cx - 10, dressTop + 13.5, 20, 2.5);
-
-  ctx.fillRect(cx - 6.5, dressTop + 6, 13, 2.5);
-  ctx.beginPath();
-  ctx.arc(cx + facing * 1.5, dressTop + 7.2, 2.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = char.ribbonColor || '#ffb6c1';
-  ctx.beginPath();
-  ctx.arc(cx + 7.5, dressTop + 3 + armSwing * 0.5, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = char.skinColor;
-  ctx.beginPath();
-  ctx.roundRect(cx + 6, dressTop + 4 + armSwing, 3.8, 8, 2);
-  ctx.fill();
-  ctx.stroke();
-
-  const headX = cx;
-  const headY = screenY + 5 - bodyBob;
-
-  ctx.fillStyle = char.hairColor || '#f7d060';
-  ctx.beginPath();
-  ctx.ellipse(headX - 9.5, headY + 2, 3.8, 6.5, 0.25, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.ellipse(headX + 9.5, headY + 2, 3.8, 6.5, -0.25, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#ff1493';
-  ctx.beginPath();
-  ctx.arc(headX - 7.5, headY - 2.5, 2.3, 0, Math.PI * 2);
-  ctx.arc(headX + 7.5, headY - 2.5, 2.3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = char.skinColor;
-  ctx.beginPath();
-  ctx.arc(headX, headY, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = char.hairColor || '#f7d060';
-  ctx.beginPath();
-  ctx.arc(headX, headY - 1.5, 8.2, Math.PI, 0);
-  ctx.fill();
-  ctx.stroke();
-
-  const eyeShift = facing * 1.8;
-  ctx.fillStyle = 'rgba(255, 105, 180, 0.55)';
-  ctx.beginPath();
-  ctx.arc(headX - 3.5 + eyeShift, headY + 2.2, 1.8, 0, Math.PI * 2);
-  ctx.arc(headX + 3.5 + eyeShift, headY + 2.2, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#1b1124';
-  ctx.beginPath();
-  ctx.arc(headX - 2.4 + eyeShift, headY + 0.2, 1.7, 0, Math.PI * 2);
-  ctx.arc(headX + 2.4 + eyeShift, headY + 0.2, 1.7, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(headX - 2.9 + eyeShift, headY - 0.6, 1, 1);
-  ctx.fillRect(headX + 1.9 + eyeShift, headY - 0.6, 1, 1);
-}
-
 function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = false, isNPC = false) {
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
 
   if (screenX < -60 || screenX > canvas.width + 60 || screenY < -60 || screenY > canvas.height + 60) return;
-
-  if (char.isDoll) {
-    desenharBonecaRosa(screenX, screenY, char, isMoving);
-    return;
-  }
 
   const facing = char.facing || 1;
   const cycle = isZombie ? animFrame * 0.14 : animFrame * 0.24;
@@ -1661,7 +1504,6 @@ function desenharMinimapa() {
     miniCtx.strokeRect(mx, my, s.width * scale, s.height * scale);
   }
 
-  // Peças da Nave e Suprimentos no minimapa
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     let mx = cx + (item.x - player.x) * scale;
@@ -1694,7 +1536,6 @@ function desenharMinimapa() {
     miniCtx.fill();
   }
 
-  // Nave Espacial no minimapa (Triângulo Dourado / Verde)
   let shX = cx + (escapeShip.x + escapeShip.width / 2 - player.x) * scale;
   let shY = cy + (escapeShip.y + escapeShip.height / 2 - player.y) * scale;
   shX = Math.max(8, Math.min(mw - 8, shX));
@@ -1719,7 +1560,7 @@ function desenharMinimapa() {
     }
   }
 
-  miniCtx.fillStyle = 'rgba(255, 105, 180, 0.25)';
+  miniCtx.fillStyle = 'rgba(0, 229, 255, 0.22)';
   miniCtx.beginPath();
   miniCtx.moveTo(cx, cy);
   if (player.facing === 1) {
@@ -1730,7 +1571,7 @@ function desenharMinimapa() {
   miniCtx.closePath();
   miniCtx.fill();
 
-  miniCtx.fillStyle = '#ff69b4';
+  miniCtx.fillStyle = '#00e5ff';
   miniCtx.beginPath();
   miniCtx.arc(cx, cy, 3.8, 0, Math.PI * 2);
   miniCtx.fill();

@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FUGA DA TERRA: ÚLTIMA DECOLAGEM</title>
+  <title>OÁSIS DE SOBREVIVÊNCIA: TERRITÓRIO</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- TELA INICIAL -->
+  <!-- TELA INICIAL (ORIGINAL RESTAURADA) -->
   <div id="login-screen" class="overlay-screen">
     <div class="login-box">
-      <h1 class="game-title">ÚLTIMA DECOLAGEM</h1>
-      <p class="subtitle">O ar tóxico da Terra reduziu a expectativa de vida para 35 anos. Recupere as 3 peças da nave e decole para a estação espacial antes que seu tempo acabe.</p>
+      <h1 class="game-title">OÁSIS DE SOBREVIVÊNCIA</h1>
+      <p class="subtitle">Explore os escombros, recupere as 3 peças da nave e decole antes que seu tempo de vida acabe.</p>
       
       <div class="input-group">
-        <label for="player-name-input">NOME DA PILOTO:</label>
+        <label for="player-name-input">NOME DO SOBREVIVENTE:</label>
         <input type="text" id="player-name-input" placeholder="Digite seu codinome..." maxlength="15" />
       </div>
 
-      <button class="btn-start" onclick="iniciarJogo()">INICIAR MISSÃO</button>
+      <button class="btn-start" onclick="iniciarJogo()">ENTRAR NO TERRITÓRIO</button>
       
       <div class="controls-hint">
         <span>[W A S D] Mover</span>
@@ -55,7 +55,7 @@
     <!-- HUD SUPERIOR -->
     <div id="hud">
       <div class="hud-card">
-        <span class="hud-label">PILOTO</span>
+        <span class="hud-label">SOBREVIVENTE</span>
         <span id="display-player-name" class="hud-value">---</span>
       </div>
       <div class="hud-card">
@@ -81,8 +81,8 @@
       <div class="minimap-header">RADAR DA PLATAFORMA</div>
       <canvas id="minimapCanvas" width="160" height="160"></canvas>
       <div class="minimap-legend">
-        <span style="color:#ff69b4;">● Você</span>
-        <span style="color:#00e5ff;">◆ Peça</span>
+        <span style="color:#00e5ff;">● Você</span>
+        <span style="color:#38bdf8;">◆ Peça</span>
         <span style="color:#ffcc00;">▲ Nave</span>
         <span style="color:#ff0033;">● Zumbi</span>
       </div>
