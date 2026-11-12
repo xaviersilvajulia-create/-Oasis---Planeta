@@ -30,22 +30,48 @@
     </div>
   </div>
 
+  <!-- TELA DE VITÓRIA (OBJETIVO CONCLUÍDO) -->
+  <div id="victory-screen" class="vr-overlay" style="display: none;">
+    <div class="login-card victory-card">
+      <h1 class="glitch-victory">SINAL RESTABELECIDO!</h1>
+      <p class="subtitle">As 3 Torres de Transmissão estão online. O resgate está a caminho.</p>
+      <p id="victory-stats" class="victory-details">Expectativa de Vida Restante: -- Anos</p>
+      <button class="btn-oasis" onclick="reiniciarJogo()">JOGAR NOVAMENTE</button>
+    </div>
+  </div>
+
   <!-- INTERFACE DO JOGO (HUD EXPANDIDA) -->
   <div id="game-ui" style="display: none;">
     <header class="hud-top">
       <div class="stat-badge">SOBREVIVENTE: <span id="display-player-name">---</span></div>
-      <div class="stat-badge danger">EXPECTATIVA DE VIDA: <span id="life-span">40 Anos</span></div>
+      <div class="stat-badge danger">VIDA: <span id="life-span">40 Anos</span></div>
       <div class="stat-badge warning">SUPRIMENTOS: <span id="supplies-val">70%</span></div>
-      <div id="status-safe" class="stat-badge safe" style="display: none;">[ESCONDERIJO SEGURO]</div>
+      <div class="stat-badge tower">TORRES: <span id="towers-val">0/3</span></div>
+      <div id="status-safe" class="stat-badge safe" style="display: none;">[ESCONDERIJO]</div>
+      <button id="audio-toggle" class="btn-audio" onclick="alternarAudio()">SOM: ON</button>
     </header>
 
     <!-- MINIMAPA CONTAINER (CANTO SUPERIOR DIREITO) -->
     <div class="minimap-wrapper">
       <canvas id="minimapCanvas" width="130" height="130"></canvas>
+      <div class="minimap-legend">
+        <span style="color:#00ccff">●Você</span>
+        <span style="color:#00ff88">■Abrigo</span>
+        <span style="color:#ffcc00">▲Torre</span>
+        <span style="color:#ff0033">●Zumbi</span>
+      </div>
     </div>
 
-    <!-- NOTIFICAÇÃO DE ITEM -->
+    <!-- NOTIFICAÇÃO DE ITEM / TORRE -->
     <div id="item-popup" class="item-popup" style="display: none;"></div>
+
+    <!-- BARRA DE PROGRESSO PARA LIGAR TORRE -->
+    <div id="tower-progress-box" class="progress-box" style="display: none;">
+      <div class="progress-label">RELIGANDO TRANSMISSOR...</div>
+      <div class="progress-track">
+        <div id="tower-progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
 
     <!-- PROMPTS DE INTERAÇÃO -->
     <div id="interaction-prompt" class="prompt-box" style="display: none;">
