@@ -225,20 +225,20 @@ const escapeShip = {
   name: "Cápsula Orbital Aurora"
 };
 
-// AS 3 CONSTRUÇÕES DAS PEÇAS DA NAVE
+// AS 3 CONSTRUÇÕES DAS PEÇAS DA NAVE (BEM DISTANTES E ESCONDIDAS)
 const buildings = [
   {
-    x: 420, y: 1280, w: 175, h: 150,
+    x: 240, y: 1460, w: 185, h: 160,
     doorSide: 'bottom', doorPos: 65, doorWidth: 42,
     type: 'clinic', title: 'POSTO MÉDICO', onFire: true
   },
   {
-    x: 1520, y: 1750, w: 185, h: 155,
+    x: 1640, y: 1960, w: 195, h: 165,
     doorSide: 'top', doorPos: 68, doorWidth: 44,
     type: 'warehouse', title: 'DEPÓSITO SUL', onFire: true
   },
   {
-    x: 2150, y: 820, w: 180, h: 150,
+    x: 2380, y: 680, w: 190, h: 160,
     doorSide: 'left', doorPos: 52, doorWidth: 42,
     type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true
   }
@@ -247,28 +247,29 @@ const buildings = [
 // POUCOS CARROS PELO CAMINHO
 const wreckedCars = [
   { x: 1330, y: 840, w: 72, h: 36, color: '#5c2b24', onFire: true, dir: 1 },
-  { x: 760, y: 1080, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
-  { x: 1740, y: 920, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
+  { x: 760, y: 1120, w: 72, h: 36, color: '#39424a', onFire: false, dir: -1 },
+  { x: 1780, y: 860, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// ITENS NO CHÃO: 3 PEÇAS DA NAVE + COMIDAS E ÁGUAS PONTUAIS
+// ITENS NO CHÃO: 3 PEÇAS DA NAVE (COM FORMATOS PRÓPRIOS E MAIS DIFÍCEIS DE ACHAR) + COMIDAS E ÁGUAS
 const itemsOnGround = [
-  // 3 PEÇAS DA NAVE
-  { id: 101, x: 455, y: 1315, type: 'ship_part', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false },
-  { id: 102, x: 2295, y: 935, type: 'ship_part', label: 'Chip de Navegação', years: 4, hunger: 0, thirst: 0, collected: false },
-  { id: 103, x: 1670, y: 1865, type: 'ship_part', label: 'Núcleo de Combustível', years: 4, hunger: 0, thirst: 0, collected: false },
+  // 3 PEÇAS DA NAVE (revealedOnRadar começa false; os NPCs revelam no radar quando você pede ajuda!)
+  { id: 101, x: 268, y: 1495, type: 'ship_part', partShape: 'suit', label: 'Traje Criogênico', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
+  { id: 102, x: 2535, y: 805, type: 'ship_part', partShape: 'chip', label: 'Chip de Navegação', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
+  { id: 103, x: 1800, y: 2090, type: 'ship_part', partShape: 'fuel', label: 'Núcleo de Combustível', years: 4, hunger: 0, thirst: 0, collected: false, revealedOnRadar: false },
 
   // ÁGUAS (MATAM A SEDE)
   { id: 1, x: 1120, y: 950, type: 'water', label: 'Garrafa de Água', years: 2, hunger: 0, thirst: 45, collected: false },
-  { id: 2, x: 1820, y: 860, type: 'water', label: 'Cantil de Água Pura', years: 2, hunger: 0, thirst: 50, collected: false },
-  { id: 3, x: 1380, y: 1560, type: 'water', label: 'Galão de Água', years: 2, hunger: 0, thirst: 50, collected: false },
+  { id: 2, x: 1860, y: 810, type: 'water', label: 'Cantil de Água Pura', years: 2, hunger: 0, thirst: 50, collected: false },
+  { id: 3, x: 1420, y: 1620, type: 'water', label: 'Galão de Água', years: 2, hunger: 0, thirst: 50, collected: false },
 
   // COMIDAS (MATAM A FOME)
-  { id: 4, x: 680, y: 1180, type: 'food', label: 'Ração Enlatada', years: 2, hunger: 45, thirst: 0, collected: false },
-  { id: 5, x: 1640, y: 1380, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
-  { id: 6, x: 1940, y: 1020, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false }
+  { id: 4, x: 640, y: 1220, type: 'food', label: 'Ração Enlatada', years: 2, hunger: 45, thirst: 0, collected: false },
+  { id: 5, x: 1660, y: 1420, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
+  { id: 6, x: 2020, y: 980, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false }
 ];
 
+// PERSONAGENS QUE AJUDAM A ACHAR O COMBUSTÍVEL, O TRAJE E O CHIP
 const npcs = [
   {
     id: 1,
@@ -287,18 +288,34 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "As 3 peças da nave estão nas construções ao sul, sudoeste e leste. Não deixe sua fome ou sede caírem demais, senão você fica lento!",
+    dialog: "Ei, sobrevivente! Eu sei onde esconderam o Combustível e o Chip da nave Aurora. Qual pista você precisa agora?",
     options: [
-      { text: "Aceitar a água e a ração que ele guardou.", years: 3, hunger: 35, thirst: 35, resp: "Você se alimentou e recuperou energia para correr!" },
-      { text: "Agradecer pela informação e seguir rápido.", years: 2, hunger: 0, thirst: 0, resp: "Ganhaste +2 anos de fôlego com a dica do engenheiro." }
+      {
+        text: "Onde posso achar o Galão de Combustível?",
+        years: 2, hunger: 0, thirst: 0,
+        revealPartId: 103,
+        resp: "DICA DO MARCUS: Siga bem para o SUL até o DEPÓSITO SUL (em chamas). O galão vermelho de combustível está escondido no canto interno direito! Marquei o sinal no seu radar."
+      },
+      {
+        text: "Onde está o Chip de Navegação?",
+        years: 2, hunger: 0, thirst: 0,
+        revealPartId: 102,
+        resp: "DICA DO MARCUS: Vá direto para o LESTE até o LABORATÓRIO LESTE. Entre pela porta esquerda e procure no fundo da sala! Marquei o sinal no seu radar."
+      },
+      {
+        text: "Preciso de água e comida para a busca.",
+        years: 2, hunger: 35, thirst: 35,
+        revealPartId: null,
+        resp: "Tome aqui! Se precisar das dicas de onde estão as peças, pode falar comigo de novo."
+      }
     ],
     solved: false
   },
   {
     id: 2,
     name: "Doutora Elena",
-    x: 640,
-    y: 1390,
+    x: 680,
+    y: 1280,
     width: 26,
     height: 40,
     skinColor: '#ffdbac',
@@ -311,10 +328,26 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "O Traje Criogênico está dentro do Posto Médico aqui ao lado. Tenho um soro hidratante caso esteja exausto.",
+    dialog: "Você parece estar procurando as peças da nave! Eu vi onde guardaram o Traje Criogênico e também sei onde está o Combustível.",
     options: [
-      { text: "Tomar o soro hidratante e energético.", years: 4, hunger: 25, thirst: 45, resp: "Hidratação restaurada! Sua velocidade voltou ao máximo." },
-      { text: "Entrar direto no Posto Médico.", years: -2, hunger: 0, thirst: 0, resp: "A fumaça desgastou um pouco sua saúde (-2 anos)." }
+      {
+        text: "Onde posso encontrar o Traje Criogênico?",
+        years: 3, hunger: 0, thirst: 0,
+        revealPartId: 101,
+        resp: "DICA DA ELENA: Siga mais para SUDOESTE até o POSTO MÉDICO. Entre pela porta de baixo e olhe no canto superior esquerdo! Marquei o sinal no seu radar."
+      },
+      {
+        text: "Você sabe onde fica o Combustível?",
+        years: 2, hunger: 0, thirst: 0,
+        revealPartId: 103,
+        resp: "DICA DA ELENA: O galão de combustível foi levado para o DEPÓSITO SUL, bem longe ao sudeste da nave! Marquei a direção no seu radar."
+      },
+      {
+        text: "Aplicar soro hidratante para correr mais rápido.",
+        years: 3, hunger: 20, thirst: 45,
+        revealPartId: null,
+        resp: "Hidratação restaurada! Fale comigo novamente se quiser dicas da localização das peças."
+      }
     ],
     solved: false
   }
@@ -323,10 +356,10 @@ const npcs = [
 const zombies = [
   { x: 1650, y: 880, width: 26, height: 40, speed: 1.05, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
   { x: 820, y: 1120, width: 26, height: 40, speed: 0.98, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1380, y: 1560, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 540, y: 980, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
-  { x: 1960, y: 920, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
-  { x: 1520, y: 1320, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
+  { x: 1450, y: 1660, width: 26, height: 40, speed: 1.02, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 480, y: 1180, width: 26, height: 40, speed: 0.95, vx: 0, vy: 0, facing: 1, patrolTimer: 0, isMoving: false },
+  { x: 2060, y: 840, width: 26, height: 40, speed: 1.08, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false },
+  { x: 1580, y: 1380, width: 26, height: 40, speed: 1.0, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false }
 ];
 
 function redimensionarCanvas() {
@@ -392,7 +425,10 @@ function reiniciarJogo() {
   document.getElementById('game-over-screen').style.display = 'none';
   document.getElementById('victory-screen').style.display = 'none';
 
-  itemsOnGround.forEach(i => i.collected = false);
+  itemsOnGround.forEach(i => {
+    i.collected = false;
+    if (i.type === 'ship_part') i.revealedOnRadar = false;
+  });
   npcs.forEach(n => n.solved = false);
 
   requestAnimationFrame(gameLoop);
@@ -776,17 +812,18 @@ function verificarInteracoes() {
       prompt.style.display = 'block';
       return;
     } else {
-      prompt.innerHTML = `Nave Incompleta: Vasculhe as construções distantes (${parts}/3 Peças)`;
+      prompt.innerHTML = `Nave Incompleta: Fale com os sobreviventes para achar as peças (${parts}/3)`;
       prompt.style.display = 'block';
       return;
     }
   }
 
+  // NPCs sempre permitem conversar para pedir dicas de onde encontrar os itens
   for (let npc of npcs) {
     const dist = Math.hypot((player.x + player.width/2) - (npc.x + npc.width/2), (player.y + player.height/2) - (npc.y + npc.height/2));
-    if (dist < 50 && !npc.solved) {
+    if (dist < 52) {
       activeNPC = npc;
-      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para conversar com ${npc.name}`;
+      prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pedir ajuda a ${npc.name}`;
       prompt.style.display = 'block';
       return;
     }
@@ -795,7 +832,7 @@ function verificarInteracoes() {
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     const dist = Math.hypot((player.x + player.width/2) - item.x, (player.y + player.height/2) - item.y);
-    if (dist < 42) {
+    if (dist < 38) {
       activeItem = item;
       prompt.innerHTML = `Pressione <span class="key-highlight">[E]</span> para pegar ${item.label}`;
       prompt.style.display = 'block';
@@ -874,7 +911,7 @@ function mostrarPopupItem(texto) {
   const pop = document.getElementById('item-popup');
   pop.innerText = texto;
   pop.style.display = 'block';
-  setTimeout(() => { pop.style.display = 'none'; }, 2800);
+  setTimeout(() => { pop.style.display = 'none'; }, 3000);
 }
 
 function verificarAtaqueZumbi() {
@@ -922,18 +959,39 @@ function abrirDialogo(npc) {
 }
 
 function responderNPC(npc, opcao) {
+  // Se a opção for um suprimento e o NPC já tiver dado suprimento antes, avisa
+  if (opcao.revealPartId === null && npc.solved) {
+    document.getElementById('npc-text').innerText = "Já te entreguei todos os meus suprimentos extras, mas ainda posso te dizer onde estão as peças da nave!";
+    document.getElementById('dialog-options').innerHTML = `
+      <button class="btn-oasis" onclick="abrirDialogo(activeNPC)">Pedir dica sobre as peças</button>
+      <button class="btn-oasis" onclick="fecharDialogo()">Voltar à Missão</button>
+    `;
+    return;
+  }
+
   lifeYears = Math.max(0, lifeYears + opcao.years);
   hunger = Math.min(100, hunger + (opcao.hunger || 0));
   thirst = Math.min(100, thirst + (opcao.thirst || 0));
+
+  // Revela a localização da peça no radar quando você pede a dica ao personagem!
+  if (opcao.revealPartId) {
+    const part = itemsOnGround.find(i => i.id === opcao.revealPartId);
+    if (part) {
+      part.revealedOnRadar = true;
+      mostrarPopupItem(`SINAL DETECTADO NO RADAR: ${part.label}!`);
+    }
+  } else {
+    npc.solved = true;
+  }
 
   atualizarHUDStatus();
 
   if (opcao.years > 0) tocarEfeitoSonoro('item');
   else tocarEfeitoSonoro('damage');
 
-  npc.solved = true;
   document.getElementById('npc-text').innerText = `${opcao.resp}`;
   document.getElementById('dialog-options').innerHTML = `
+    <button class="btn-oasis" onclick="abrirDialogo(activeNPC)">Fazer outra pergunta</button>
     <button class="btn-oasis" onclick="fecharDialogo()">Voltar à Missão</button>
   `;
 
@@ -1082,7 +1140,7 @@ function desenharTetosConstrucoes() {
     const by = b.y - camera.y;
     if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) continue;
 
-    ctx.fillStyle = 'rgba(38, 29, 24, 0.68)';
+    ctx.fillStyle = 'rgba(38, 29, 24, 0.85)';
     ctx.beginPath();
     ctx.rect(bx + 10, by + 10, b.w - 20, b.h - 20);
     ctx.moveTo(bx + 35, by + 35);
@@ -1270,7 +1328,7 @@ function desenharCenario() {
 }
 
 // ==========================================
-// ITENS NO CHÃO + BARRINHA FLUTUANTE COM O NOME AO ACHAR
+// ITENS NO CHÃO (COMBUSTÍVEL, TRAJE E CHIP COM FORMATOS PRÓPRIOS)
 // ==========================================
 function desenharItemChao(item) {
   if (item.collected) return;
@@ -1280,23 +1338,86 @@ function desenharItemChao(item) {
   if (screenX < -120 || screenX > canvas.width + 120 || screenY < -120 || screenY > canvas.height + 120) return;
 
   if (item.type === 'ship_part') {
-    const glow = 13 + Math.sin(animFrame * 0.15) * 3;
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+    const pulse = 13 + Math.sin(animFrame * 0.14) * 2.5;
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.22)';
     ctx.beginPath();
-    ctx.arc(screenX, screenY, glow, 0, Math.PI * 2);
+    ctx.arc(screenX, screenY, pulse, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#00e5ff';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(screenX, screenY - 8);
-    ctx.lineTo(screenX + 8, screenY);
-    ctx.lineTo(screenX, screenY + 8);
-    ctx.lineTo(screenX - 8, screenY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    if (item.partShape === 'fuel') {
+      // FORMATO DE GALÃO DE COMBUSTÍVEL VERMELHO
+      ctx.fillStyle = '#dc2626';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(screenX - 7, screenY - 7, 14, 16, 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Alça superior do galão
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(screenX - 4, screenY - 10, 7, 3);
+
+      // Bico/tampa amarela de combustível
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(screenX + 3, screenY - 10, 3, 4);
+
+      // Marcação "X" de galão metálico
+      ctx.strokeStyle = '#fca5a5';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(screenX - 4, screenY - 3);
+      ctx.lineTo(screenX + 4, screenY + 5);
+      ctx.moveTo(screenX + 4, screenY - 3);
+      ctx.lineTo(screenX - 4, screenY + 5);
+      ctx.stroke();
+
+    } else if (item.partShape === 'suit') {
+      // FORMATO DE TRAJE CRIOGÊNICO / ESPACIAL
+      // Capacete com visor azul
+      ctx.fillStyle = '#e2e8f0';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY - 7, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(screenX - 3, screenY - 8, 6, 3);
+
+      // Corpo do traje
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(screenX - 6, screenY - 2, 12, 9, 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pernas do traje
+      ctx.fillRect(screenX - 5, screenY + 7, 4, 5);
+      ctx.fillRect(screenX + 1, screenY + 7, 4, 5);
+
+    } else if (item.partShape === 'chip') {
+      // FORMATO DE CHIP DE NAVEGAÇÃO (MICROCHIP COM PINOS DOURADOS)
+      ctx.fillStyle = '#facc15';
+      for (let p = -5; p <= 5; p += 5) {
+        ctx.fillRect(screenX - 10, screenY + p - 1, 20, 2);
+        ctx.fillRect(screenX + p - 1, screenY - 10, 2, 20);
+      }
+
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.roundRect(screenX - 7, screenY - 7, 14, 14, 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Núcleo brilhante do chip
+      ctx.fillStyle = '#00e5ff';
+      ctx.fillRect(screenX - 3, screenY - 3, 6, 6);
+    }
+
   } else if (item.type === 'water') {
     ctx.fillStyle = 'rgba(0, 204, 255, 0.35)';
     ctx.beginPath();
@@ -1327,20 +1448,22 @@ function desenharItemChao(item) {
     ctx.stroke();
   }
 
+  // Barrinha com o nome só aparece quando você chega bem perto (< 85px) para manter a busca desafiadora
   const distToPlayer = Math.hypot((player.x + player.width / 2) - item.x, (player.y + player.height / 2) - item.y);
-  if (distToPlayer < 165) {
+  if (distToPlayer < 85) {
     ctx.font = 'bold 11px Rajdhani, sans-serif';
     const textWidth = ctx.measureText(item.label).width;
     const tagW = textWidth + 16;
     const tagH = 20;
     const tagX = screenX - tagW / 2;
-    const tagY = screenY - 30;
+    const tagY = screenY - 32;
 
     let accentColor = '#00e5ff';
-    if (item.type === 'water') accentColor = '#00ccff';
+    if (item.partShape === 'fuel') accentColor = '#ef4444';
+    else if (item.type === 'water') accentColor = '#00ccff';
     else if (item.type === 'food') accentColor = '#ff9900';
 
-    ctx.fillStyle = 'rgba(14, 10, 8, 0.9)';
+    ctx.fillStyle = 'rgba(14, 10, 8, 0.92)';
     ctx.beginPath();
     ctx.roundRect(tagX, tagY, tagW, tagH, 4);
     ctx.fill();
@@ -1512,7 +1635,7 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
     const floatY = Math.sin(animFrame * 0.1) * 2;
     ctx.fillStyle = '#ffcc00';
     ctx.font = '11px "Press Start 2P"';
-    ctx.fillText('!', cx - 4, screenY - 8 + floatY);
+    ctx.fillText('?', cx - 4, screenY - 8 + floatY);
   }
 }
 
@@ -1524,7 +1647,7 @@ function desenharMinimapa() {
 
   const mw = miniCanvas.width;
   const mh = miniCanvas.height;
-  const scale = 0.042;
+  const scale = 0.038;
 
   const bgGrad = miniCtx.createRadialGradient(mw / 2, mh / 2, 10, mw / 2, mh / 2, mw * 0.7);
   bgGrad.addColorStop(0, '#1a1410');
@@ -1570,19 +1693,21 @@ function desenharMinimapa() {
     miniCtx.fillRect(mx, my, Math.max(3, c.w * scale), Math.max(2, c.h * scale));
   }
 
+  // Peças da nave SÓ aparecem no radar depois que você conversa com os personagens e pede ajuda!
   for (let item of itemsOnGround) {
     if (item.collected) continue;
     let mx = cx + (item.x - player.x) * scale;
     let my = cy + (item.y - player.y) * scale;
 
     if (item.type === 'ship_part') {
+      if (!item.revealedOnRadar) continue;
       mx = Math.max(12, Math.min(mw - 12, mx));
       my = Math.max(12, Math.min(mh - 12, my));
-      miniCtx.strokeStyle = 'rgba(0, 229, 255, 0.75)';
-      miniCtx.lineWidth = 1.2;
+      miniCtx.strokeStyle = item.partShape === 'fuel' ? '#ef4444' : '#00e5ff';
+      miniCtx.lineWidth = 1.4;
       miniCtx.setLineDash([2, 2]);
       miniCtx.beginPath();
-      miniCtx.arc(mx, my, 9 + Math.sin(animFrame * 0.1) * 2, 0, Math.PI * 2);
+      miniCtx.arc(mx, my, 8 + Math.sin(animFrame * 0.12) * 2, 0, Math.PI * 2);
       miniCtx.stroke();
       miniCtx.setLineDash([]);
     } else {
@@ -1591,13 +1716,13 @@ function desenharMinimapa() {
     }
   }
 
-  miniCtx.fillStyle = '#ff8800';
+  // Personagens que dão dicas aparecem em destaque laranja no radar
+  miniCtx.fillStyle = '#ffaa00';
   for (let npc of npcs) {
-    if (npc.solved) continue;
     const mx = cx + (npc.x - player.x) * scale;
     const my = cy + (npc.y - player.y) * scale;
     miniCtx.beginPath();
-    miniCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+    miniCtx.arc(mx, my, 3, 0, Math.PI * 2);
     miniCtx.fill();
   }
 
@@ -1696,7 +1821,7 @@ function desenhar() {
   }
 
   for (let npc of npcs) {
-    desenharPersonagemDetalhado(npc.x, npc.y, npc, !npc.isTalking, false, !npc.solved);
+    desenharPersonagemDetalhado(npc.x, npc.y, npc, !npc.isTalking, false, true);
   }
 
   for (let z of zombies) {
