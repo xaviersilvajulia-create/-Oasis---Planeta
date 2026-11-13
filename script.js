@@ -40,53 +40,113 @@ let soundWaves = [];
 let groundDetails = [];
 
 // ==========================================
-// CENA DE INTRODUÇÃO DE 30 SEGUNDOS (WALKIE-TALKIE)
+// CENA DE VÍDEO GRAVADO NO CELULAR (30 SEGUNDOS)
 // ==========================================
 let inIntro = false;
 let introTimer = 0;
 const INTRO_DURATION = 1800; // 30 segundos exatos a 60 FPS
 let introShipAltitude = 380;
 let introCutTriggered = false;
-let introShockwaveRadius = 0;
+let introShockwaveRadius = 10;
+let speechTimeoutIds = [];
 
-const WALKIE_SCRIPT =
-  "Câmbio! Se alguém encontrar este gravador, ouça rápido! " +
-  "Quando o núcleo da Terra rompeu, a radiação mudou tudo e está roubando nossos anos de vida! " +
-  "Para fugir deste planeta, você precisa recuperar as três peças da Cápsula Aurora nas ruínas! " +
-  "Fale com os sobreviventes, economize a bateria da lanterna e se ouvir passos rápidos, entre num armário e apague a luz! " +
-  "Eles caçam de quatro patas e ouvem qualquer corrida! Não faça barulho, eu estou presa no setor norte e preciso que você...";
+// Frases curtas com pausas naturais de respiração para evitar tom robótico
+const PHONE_VIDEO_LINES = [
+  {
+    delayMs: 300,
+    rate: 1.08,
+    pitch: 1.08,
+    text: "Gente... se alguém achar esse celular... olha o que aconteceu com a cidade.",
+    caption: "\"Gente... se alguém achar esse celular... olha o que aconteceu com a cidade.\""
+  },
+  {
+    delayMs: 5200,
+    rate: 1.12,
+    pitch: 1.10,
+    text: "O núcleo rompeu, e essa radiação tá roubando nossos anos de vida.",
+    caption: "\"O núcleo rompeu, e essa radiação tá roubando nossos anos de vida.\""
+  },
+  {
+    delayMs: 10200,
+    rate: 1.16,
+    pitch: 1.12,
+    text: "Escuta rápido! Tem uma cápsula da Aurora no setor norte, mas faltam três peças nas ruínas.",
+    caption: "\"Escuta rápido! Tem uma cápsula da Aurora no setor norte, mas faltam três peças nas ruínas.\""
+  },
+  {
+    delayMs: 15800,
+    rate: 1.18,
+    pitch: 1.14,
+    text: "Economiza a lanterna, e se ouvir passos rápidos, entra num armário!",
+    caption: "\"Economiza a lanterna, e se ouvir passos rápidos, entra num armário!\""
+  },
+  {
+    delayMs: 20400,
+    rate: 1.24,
+    pitch: 1.20,
+    text: "Espera... tem alguma coisa aqui! Eles andam de quatro patas e... não, não, não!",
+    caption: "\"Espera... tem alguma coisa aqui! Eles andam de quatro patas e... não, não, NÃO—\""
+  }
+];
 
-function selecionarVozFeminina() {
+function selecionarVozFemininaNatural() {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   const ptVoices = voices.filter(v => v.lang.toLowerCase().includes('pt'));
 
-  // Prioriza vozes femininas naturais em português
-  const preferredNames = ['francisca', 'thalita', 'maria', 'luciana', 'vitoria', 'google português', 'female', 'feminino'];
-  for (let name of preferredNames) {
+  // Prioriza vozes neurais naturais (menos robóticas) em português
+  const naturalPriority = [
+    'francisca online',
+    'thalita online',
+    'natural',
+    'google português',
+    'francisca',
+    'thalita',
+    'maria',
+    'luciana',
+    'vitoria'
+  ];
+
+  for (let name of naturalPriority) {
     const found = ptVoices.find(v => v.name.toLowerCase().includes(name));
     if (found) return found;
   }
   return ptVoices[0] || null;
 }
 
-function falarNoWalkieTalkie() {
+function limparFalasAgendadas() {
+  for (let id of speechTimeoutIds) clearTimeout(id);
+  speechTimeoutIds = [];
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function agendarFalasDoCelular() {
+  limparFalasAgendadas();
   if (!audioEnabled || !('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
 
-  const utter = new SpeechSynthesisUtterance(WALKIE_SCRIPT);
-  utter.lang = 'pt-BR';
-  utter.rate = 1.24;  // Fala rápida e urgente de filme
-  utter.pitch = 1.18; // Tom feminino tenso
+  const chosenVoice = selecionarVozFemininaNatural();
 
-  const femVoice = selecionarVozFeminina();
-  if (femVoice) utter.voice = femVoice;
+  PHONE_VIDEO_LINES.forEach(line => {
+    const id = setTimeout(() => {
+      if (!inIntro || introCutTriggered || !audioEnabled) return;
+      document.getElementById('intro-subtitle').innerText = line.caption;
 
-  window.speechSynthesis.speak(utter);
+      const utter = new SpeechSynthesisUtterance(line.text);
+      utter.lang = 'pt-BR';
+      utter.rate = line.rate;
+      utter.pitch = line.pitch;
+      if (chosenVoice) utter.voice = chosenVoice;
+
+      window.speechSynthesis.speak(utter);
+    }, line.delayMs);
+    speechTimeoutIds.push(id);
+  });
 }
 
 // ==========================================
-// SISTEMA DE ÁUDIO E EFEITOS DE RÁDIO (WEB AUDIO API)
+// SISTEMA DE ÁUDIO E EFEITOS SONOROS (WEB AUDIO API)
 // ==========================================
 let audioCtx = null;
 let audioEnabled = true;
@@ -151,7 +211,7 @@ function iniciarAudio() {
   droneOsc1.start();
   droneOsc2.start();
 
-  // Gerador de ruído branco para vento e estática do walkie-talkie
+  // Gerador de ruído branco para vento e interferência de vídeo corrompido
   const bufferSize = audioCtx.sampleRate * 2;
   const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
   const output = noiseBuffer.getChannelData(0);
@@ -159,7 +219,6 @@ function iniciarAudio() {
     output[i] = Math.random() * 2 - 1;
   }
 
-  // Vento ambiente
   const windSource = audioCtx.createBufferSource();
   windSource.buffer = noiseBuffer;
   windSource.loop = true;
@@ -177,15 +236,14 @@ function iniciarAudio() {
   windGain.connect(masterGain);
   windSource.start();
 
-  // Estática dedicada do Walkie-Talkie
   const staticSource = audioCtx.createBufferSource();
   staticSource.buffer = noiseBuffer;
   staticSource.loop = true;
 
   const staticFilter = audioCtx.createBiquadFilter();
   staticFilter.type = 'bandpass';
-  staticFilter.frequency.value = 1850;
-  staticFilter.Q.value = 1.4;
+  staticFilter.frequency.value = 1600;
+  staticFilter.Q.value = 1.2;
 
   radioStaticGain = audioCtx.createGain();
   radioStaticGain.gain.value = 0;
@@ -195,7 +253,6 @@ function iniciarAudio() {
   radioStaticGain.connect(masterGain);
   staticSource.start();
 
-  // Motor da nave
   engineOsc = audioCtx.createOscillator();
   engineGain = audioCtx.createGain();
   const engineFilter = audioCtx.createBiquadFilter();
@@ -223,8 +280,8 @@ function alternarAudio() {
   const btn = document.getElementById('audio-toggle');
   if (btn) btn.innerText = audioEnabled ? 'SOM: ON' : 'SOM: OFF';
 
-  if (!audioEnabled && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+  if (!audioEnabled) {
+    limparFalasAgendadas();
   }
 
   if (masterGain && audioCtx) {
@@ -257,9 +314,9 @@ function atualizarMusicaDeTensao() {
     subOsc.frequency.setValueAtTime(freq * 2, now);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime((isBeingChased || inIntro) ? 720 : 380, now);
+    filter.frequency.setValueAtTime((isBeingChased || inIntro) ? 680 : 380, now);
 
-    const vol = (isBeingChased || inIntro) ? 0.14 : 0.09;
+    const vol = (isBeingChased || inIntro) ? 0.13 : 0.09;
     noteGain.gain.setValueAtTime(0.001, now);
     noteGain.gain.linearRampToValueAtTime(vol, now + 0.04);
     noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
@@ -303,35 +360,35 @@ function tocarEfeitoSonoro(tipo) {
 
   const now = audioCtx.currentTime;
 
-  if (tipo === 'walkie_beep') {
+  if (tipo === 'phone_rec_start') {
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(1420, now);
-    osc.frequency.setValueAtTime(1080, now + 0.05);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.frequency.setValueAtTime(980, now);
+    osc.frequency.setValueAtTime(1320, now + 0.06);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
     osc.start(now);
-    osc.stop(now + 0.12);
+    osc.stop(now + 0.14);
   } else if (tipo === 'monster_ambush_roar') {
-    // Rugido grave + guincho agudo sobrepostos para o corte do Ato 3
+    // Rugido grave + guincho agudo + impacto do celular caindo
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(135, now);
-    osc.frequency.linearRampToValueAtTime(42, now + 1.1);
-    gain.gain.setValueAtTime(0.45, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+    osc.frequency.linearRampToValueAtTime(40, now + 1.15);
+    gain.gain.setValueAtTime(0.46, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
     osc.start(now);
-    osc.stop(now + 1.15);
+    osc.stop(now + 1.2);
 
     const screech = audioCtx.createOscillator();
     const sGain = audioCtx.createGain();
     screech.type = 'sawtooth';
-    screech.frequency.setValueAtTime(520, now + 0.05);
-    screech.frequency.exponentialRampToValueAtTime(980, now + 0.25);
-    screech.frequency.exponentialRampToValueAtTime(190, now + 0.85);
-    sGain.gain.setValueAtTime(0.32, now + 0.05);
+    screech.frequency.setValueAtTime(540, now + 0.04);
+    screech.frequency.exponentialRampToValueAtTime(1020, now + 0.24);
+    screech.frequency.exponentialRampToValueAtTime(180, now + 0.85);
+    sGain.gain.setValueAtTime(0.32, now + 0.04);
     sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
     screech.connect(sGain);
     sGain.connect(masterGain);
-    screech.start(now + 0.05);
+    screech.start(now + 0.04);
     screech.stop(now + 0.9);
   } else if (tipo === 'step') {
     osc.type = 'triangle';
@@ -619,7 +676,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Você ouviu aquela gravação no rádio? Era a Sara... ela não conseguiu sair do setor norte. Precisamos terminar o que ela começou! Qual peça da nave você quer localizar?",
+    dialog: "Você assistiu ao vídeo no celular da Sara? Achamos o aparelho perto do setor norte... Ela tentou avisar todo mundo. Precisamos terminar o que ela começou! Qual peça da nave você quer localizar?",
     options: [
       {
         text: "Onde posso achar o Galão de Combustível?",
@@ -659,7 +716,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Aqueles monstros de quatro patas reagem ao som de corrida e à luz. Eu vi onde guardaram o Traje Criogênico e o Combustível.",
+    dialog: "Aqueles monstros de quatro patas reagem ao som de corrida e à luz, exatamente como a Sara alertou no vídeo. Eu vi onde guardaram o Traje Criogênico e o Combustível.",
     options: [
       {
         text: "Onde posso encontrar o Traje Criogênico?",
@@ -753,16 +810,15 @@ function iniciarCenaIntroducao() {
   introCutTriggered = false;
   introShockwaveRadius = 10;
 
-  const box = document.getElementById('intro-radio-box');
-  box.classList.remove('signal-lost');
-  document.getElementById('wave-bars').classList.remove('dead');
-  document.getElementById('radio-dot').style.background = '#22c55e';
-  document.getElementById('radio-status-text').innerText = 'WALKIE-TALKIE — FREQUÊNCIA 104.8 MHz (GRAVAÇÃO RECUPERADA)';
+  const phoneFrame = document.getElementById('phone-frame');
+  phoneFrame.classList.remove('dropped', 'hidden-phone');
+  document.getElementById('rec-dot').style.background = '#ef4444';
+  document.getElementById('rec-label').innerText = 'REC';
+  document.getElementById('phone-signal').innerText = 'SEM REDE';
   document.getElementById('intro-overlay').style.display = 'flex';
 
-  tocarEfeitoSonoro('walkie_beep');
-  definirEstaticaRadio(0.06);
-  falarNoWalkieTalkie();
+  tocarEfeitoSonoro('phone_rec_start');
+  agendarFalasDoCelular();
 }
 
 function pularIntroducao() {
@@ -770,9 +826,7 @@ function pularIntroducao() {
   inIntro = false;
   introShipAltitude = 0;
   definirEstaticaRadio(0);
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
+  limparFalasAgendadas();
   document.getElementById('intro-overlay').style.display = 'none';
 }
 
@@ -781,46 +835,37 @@ function atualizarCenaIntroducao() {
   const remaining = Math.max(0, Math.ceil((INTRO_DURATION - introTimer) / 60));
   document.getElementById('intro-timer').innerText = remaining + 's';
 
+  const recSecs = Math.min(24, Math.floor(introTimer / 60));
+  document.getElementById('phone-rec-time').innerText = '00:' + String(recSecs).padStart(2, '0');
+
   const sub = document.getElementById('intro-subtitle');
   const actLabel = document.getElementById('intro-act-label');
+  const phoneFrame = document.getElementById('phone-frame');
 
-  // ATO 1 (0s - 8s): O Colapso do Núcleo
-  if (introTimer < 480) {
-    actLabel.innerText = 'ATO I — O COLAPSO DO NÚCLEO';
+  // ATO 1 (0s - 10s): Sara segura o celular mostrando o céu e a cidade em chamas
+  if (introTimer < 600) {
+    actLabel.innerText = 'CENA I — VÍDEO DO CELULAR DE SARA';
     introShockwaveRadius += 3.2;
-    if (introTimer === 1) {
-      sub.innerText = '"Câmbio! Se alguém encontrar este gravador, ouça rápido! Quando o núcleo da Terra rompeu, a radiação mudou tudo e está roubando nossos anos de vida!"';
-    }
-    if (introTimer === 120 || introTimer === 320) {
+
+    if (introTimer === 180 || introTimer === 420) {
       lightningAlpha = 0.7;
       tocarEfeitoSonoro('thunder');
       screenShake = 8;
     }
-    // Câmera sobrevoando as ruínas em chamas
-    camera.x = 750 + (introTimer * 0.9) - canvas.width / 2;
+
+    camera.x = 780 + (introTimer * 0.75) - canvas.width / 2;
     camera.y = 1150 - canvas.height / 2;
   }
-  // ATO 2 (8s - 18s): As Instruções de Sobrevivência
+  // ATO 2 (10s - 18s): Ela vira o celular mostrando as ruínas e passando as instruções
   else if (introTimer < 1080) {
-    actLabel.innerText = 'ATO II — AS REGRAS DE SOBREVIVÊNCIA';
-    if (introTimer === 480) {
-      tocarEfeitoSonoro('walkie_beep');
-      sub.innerText = '"Para fugir deste planeta, recupere as três peças da Cápsula Aurora! Economize a bateria da lanterna e se ouvir passos rápidos, entre num armário e apague a luz!"';
-    }
-    // Câmera desliza pelas casas destruídas e esconderijos
-    const t2 = introTimer - 480;
-    camera.x = 1200 + (t2 * 1.1) - canvas.width / 2;
-    camera.y = 1180 + Math.sin(t2 * 0.01) * 140 - canvas.height / 2;
+    actLabel.innerText = 'CENA II — AS REGRAS DE SOBREVIVÊNCIA';
+    const t2 = introTimer - 600;
+    camera.x = 1220 + (t2 * 0.95) - canvas.width / 2;
+    camera.y = 1180 + Math.sin(t2 * 0.01) * 120 - canvas.height / 2;
   }
-  // ATO 3 (18s - 24s): A Emboscada e o Corte Brusco com Barulho de Monstro
+  // ATO 3 (18s - 24s): O monstro quadrúpede surge atrás dela e derruba o celular
   else if (introTimer < 1440) {
-    actLabel.innerText = 'ATO III — EMBOSCADA NO SETOR NORTE';
-    if (introTimer === 1080) {
-      tocarEfeitoSonoro('walkie_beep');
-      sub.innerText = '"Eles caçam de quatro patas e ouvem qualquer corrida! Não faça barulho, eu estou presa no setor norte e preciso que você—"';
-    }
-
-    // Câmera foca no monstro quadrúpede avançando
+    actLabel.innerText = 'CENA III — ATAQUE NO SETOR NORTE';
     const m = quadrupedMonsters[0];
     camera.x = (m.x + 24) - canvas.width / 2;
     camera.y = (m.y + 15) - canvas.height / 2;
@@ -828,29 +873,27 @@ function atualizarCenaIntroducao() {
     // Aos 22.8s (frame 1370): CORTA A FALA NO MEIO E TOCA O BARULHO DE MONSTRO!
     if (introTimer >= 1370 && !introCutTriggered) {
       introCutTriggered = true;
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Corta a voz dela bruscamente!
-      }
+      limparFalasAgendadas(); // Corta a voz dela bruscamente!
       tocarEfeitoSonoro('monster_ambush_roar');
-      definirEstaticaRadio(0.22); // Estática pesada de rádio caído
-      screenShake = 24;
-      flashDamage = 14;
+      definirEstaticaRadio(0.20);
+      screenShake = 26;
+      flashDamage = 15;
 
-      const box = document.getElementById('intro-radio-box');
-      box.classList.add('signal-lost');
-      document.getElementById('wave-bars').classList.add('dead');
-      document.getElementById('radio-dot').style.background = '#ef4444';
-      document.getElementById('radio-status-text').innerText = 'SINAL INTERROMPIDO — TRANSMISSÃO PERDIDA';
-      sub.innerText = '[RUGIDO ENSUREDECEDOR E ESTÁTICA PESADA... SINAL PERDIDO]';
+      phoneFrame.classList.add('dropped');
+      document.getElementById('rec-dot').style.background = '#94a3b8';
+      document.getElementById('rec-label').innerText = 'ERRO';
+      document.getElementById('phone-signal').innerText = 'TELA TRINCADA';
+      sub.innerText = '[RUGIDO ENSUREDECEDOR — O CELULAR CAI NO CHÃO E O VÍDEO CORROMPE]';
     }
   }
-  // ATO 4 (24s - 30s): Pouso de Emergência da Cápsula Aurora
+  // ATO 4 (24s - 30s): Corta para o pouso de emergência da Cápsula Aurora
   else {
-    actLabel.innerText = 'ATO IV — POUSO DA CÁPSULA AURORA';
-    definirEstaticaRadio(0.04);
+    actLabel.innerText = 'CENA IV — POUSO DA CÁPSULA AURORA';
+    definirEstaticaRadio(0.03);
+    phoneFrame.classList.add('hidden-phone');
 
     if (introTimer === 1440) {
-      sub.innerText = 'ÚLTIMO REGISTRO DE ÁUDIO ENCERRADO. Iniciando protocolo de sobrevivência na plataforma Aurora...';
+      sub.innerText = 'FIM DA GRAVAÇÃO. Iniciando missão na plataforma Aurora...';
     }
 
     if (introShipAltitude > 0) {
@@ -883,6 +926,125 @@ function atualizarCenaIntroducao() {
   if (introTimer >= INTRO_DURATION) {
     pularIntroducao();
   }
+}
+
+function desenharCenaCelularSara() {
+  if (!inIntro || introTimer >= 1440) return;
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2 - 20;
+  // Tremor realista da mão segurando o celular
+  const handShakeX = Math.sin(animFrame * 0.25) * (introTimer > 1080 ? 8 : 3.5);
+  const handShakeY = Math.cos(animFrame * 0.31) * (introTimer > 1080 ? 6 : 2.5);
+
+  const sx = cx + handShakeX;
+  const sy = cy + handShakeY;
+
+  ctx.save();
+
+  // Brilho alaranjado do fogo das ruínas iluminando o rosto dela
+  const fireGlow = ctx.createRadialGradient(sx, sy + 20, 15, sx, sy + 20, 190);
+  fireGlow.addColorStop(0, 'rgba(249, 115, 22, 0.28)');
+  fireGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = fireGlow;
+  ctx.beginPath();
+  ctx.arc(sx, sy + 20, 190, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ombros e jaqueta de sobrevivente de Sara
+  ctx.fillStyle = '#334155';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 95, 62, 42, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.stroke();
+
+  // Pescoço
+  ctx.fillStyle = '#eab68a';
+  ctx.fillRect(sx - 12, sy + 32, 24, 24);
+
+  // Cabelos presos com mechas soltas balançando no vento
+  const windHair = Math.sin(animFrame * 0.18) * 5;
+  ctx.fillStyle = '#291711';
+  ctx.beginPath();
+  ctx.arc(sx, sy - 6, 42, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rosto de Sara
+  ctx.fillStyle = '#f5cba7';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, 32, 40, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Franja e cabelo lateral
+  ctx.fillStyle = '#291711';
+  ctx.beginPath();
+  ctx.arc(sx, sy - 12, 34, Math.PI, 0);
+  ctx.lineTo(sx + 34 + windHair, sy + 24);
+  ctx.lineTo(sx + 24, sy - 4);
+  ctx.lineTo(sx - 24, sy - 4);
+  ctx.lineTo(sx - 34 + windHair, sy + 24);
+  ctx.closePath();
+  ctx.fill();
+
+  // Olhos assustados olhando para a câmera (e olhando para o lado no Ato 3)
+  const lookSide = introTimer > 1080 ? -4 : 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(sx - 12, sy - 4, 6.5, 4.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx + 12, sy - 4, 6.5, 4.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.arc(sx - 12 + lookSide, sy - 4, 3, 0, Math.PI * 2);
+  ctx.arc(sx + 12 + lookSide, sy - 4, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Sobrancelhas tensas
+  ctx.strokeStyle = '#1c1917';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(sx - 19, sy - 12);
+  ctx.lineTo(sx - 6, sy - 10);
+  ctx.moveTo(sx + 19, sy - 12);
+  ctx.lineTo(sx + 6, sy - 10);
+  ctx.stroke();
+
+  // Boca animada falando rápido no vídeo
+  const mouthOpen = introCutTriggered ? 7 : Math.abs(Math.sin(animFrame * 0.45)) * 5.5 + 1.5;
+  ctx.fillStyle = '#7f1d1d';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 16, 7, mouthOpen, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mão direita segurando a lateral do celular
+  ctx.fillStyle = '#eab68a';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(sx + 148, sy + 35, 26, 68, 12);
+  ctx.fill();
+  ctx.stroke();
+
+  // Se o celular já caiu (após o ataque), desenha rachaduras de vidro na tela
+  if (introCutTriggered) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx - 80, sy - 140);
+    ctx.lineTo(sx - 15, sy - 20);
+    ctx.lineTo(sx + 75, sy + 95);
+    ctx.moveTo(sx - 15, sy - 20);
+    ctx.lineTo(sx - 95, sy + 60);
+    ctx.moveTo(sx - 15, sy - 20);
+    ctx.lineTo(sx + 85, sy - 70);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function emitirOndaSonora(x, y, maxRadius) {
@@ -2377,8 +2539,7 @@ function desenharCenario() {
     ctx.stroke();
   }
 
-  // Onda de radiação do Ato 1 na abertura
-  if (inIntro && introTimer < 480) {
+  if (inIntro && introTimer < 600) {
     ctx.strokeStyle = 'rgba(239, 68, 68, 0.35)';
     ctx.lineWidth = 18;
     ctx.beginPath();
@@ -2893,18 +3054,10 @@ function desenharIluminacaoEClima() {
     ctx.fill();
   }
 
-  // Durante o Ato 3 da introdução, escurece ao redor do monstro quadrúpede para destaque dramático
   if (inIntro) {
-    if (introTimer >= 1080 && introTimer < 1440) {
-      const m = quadrupedMonsters[0];
-      const mx = m.x + m.width / 2 - camera.x;
-      const my = m.y + m.height / 2 - camera.y;
-      const spot = ctx.createRadialGradient(mx, my, 50, mx, my, 260);
-      spot.addColorStop(0, 'rgba(0,0,0,0.1)');
-      spot.addColorStop(1, 'rgba(0,0,0,0.88)');
-      ctx.fillStyle = spot;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    // Desenha Sara segurando o celular e falando na câmera frontal
+    desenharCenaCelularSara();
+
     if (lightningAlpha > 0) {
       ctx.fillStyle = `rgba(220, 235, 255, ${lightningAlpha * 0.28})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);

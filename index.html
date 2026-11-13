@@ -12,7 +12,7 @@
   <!-- TELA INICIAL -->
   <div id="login-screen">
     <div class="login-box">
-      <div class="badge-alert">TRANSMISSÃO INTERCEPTADA — SETOR 09</div>
+      <div class="badge-alert">ARQUIVO DE VÍDEO RECUPERADO — CELULAR DE SARA</div>
       <h1>ÚLTIMO RESPIRO</h1>
       <p class="subtitle">ECOS DA TERRA</p>
       <p class="desc">
@@ -30,24 +30,39 @@
   <div id="game-ui" style="display: none;">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- OVERLAY DA CENA CINEMATOGRÁFICA DE 30 SEGUNDOS (WALKIE-TALKIE) -->
+    <!-- OVERLAY DA CENA DE VÍDEO GRAVADO NO CELULAR (30 SEGUNDOS) -->
     <div id="intro-overlay" style="display: none;">
-      <div class="intro-act-badge" id="intro-act-label">ATO I — O COLAPSO DO NÚCLEO</div>
-      <div class="intro-radio-box" id="intro-radio-box">
-        <div class="radio-header">
-          <div class="radio-title">
-            <span class="rec-dot" id="radio-dot"></span>
-            <span id="radio-status-text">WALKIE-TALKIE — FREQUÊNCIA 104.8 MHz (GRAVAÇÃO RECUPERADA)</span>
+      <div class="intro-act-badge" id="intro-act-label">GRAVAÇÃO RECUPERADA — 04:17 AM</div>
+
+      <!-- MOLDURA DO CELULAR SEGURADO POR SARA -->
+      <div class="phone-frame" id="phone-frame">
+        <div class="phone-top-bar">
+          <div class="rec-indicator">
+            <span class="rec-dot" id="rec-dot"></span>
+            <span id="rec-label">REC</span>
+            <span id="phone-rec-time">00:00</span>
           </div>
-          <div class="wave-bars" id="wave-bars">
-            <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <div class="phone-status-icons">
+            <span class="signal-tag" id="phone-signal">SEM REDE</span>
+            <span class="bat-tag">4% 🪫</span>
           </div>
         </div>
-        <p id="intro-subtitle">Sintonizando frequência de emergência...</p>
-        <div class="intro-footer">
-          <span id="intro-timer">30s</span>
-          <button class="btn-skip" onclick="pularIntroducao()">Pular Cena [ENTER]</button>
+
+        <div class="phone-camera-grid">
+          <div class="corner-mark tl"></div>
+          <div class="corner-mark tr"></div>
+          <div class="corner-mark bl"></div>
+          <div class="corner-mark br"></div>
         </div>
+
+        <div class="phone-bottom-caption">
+          <p id="intro-subtitle">Iniciando reprodução do arquivo de vídeo...</p>
+        </div>
+      </div>
+
+      <div class="intro-controls-bar">
+        <span id="intro-timer">30s</span>
+        <button class="btn-skip" onclick="pularIntroducao()">Pular Vídeo [ENTER]</button>
       </div>
     </div>
 
