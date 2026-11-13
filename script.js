@@ -40,36 +40,53 @@ let soundWaves = [];
 let groundDetails = [];
 
 // ==========================================
-// CENA DE INTRODUÇÃO COM NARRAÇÃO DE VOZ
+// CENA DE INTRODUÇÃO DE 30 SEGUNDOS (WALKIE-TALKIE)
 // ==========================================
 let inIntro = false;
 let introTimer = 0;
-const INTRO_DURATION = 630; // ~10.5 segundos a 60 FPS
+const INTRO_DURATION = 1800; // 30 segundos exatos a 60 FPS
 let introShipAltitude = 380;
+let introCutTriggered = false;
+let introShockwaveRadius = 0;
 
-const INTRO_NARRATION_TEXT =
-  "Ano 2089. O colapso do núcleo terrestre liberou uma radiação silenciosa que consome os anos de vida humana e deformou aqueles que ficaram para trás. " +
-  "Durante o pouso forçado da Cápsula Aurora, os três módulos principais se perderam nas ruínas. " +
-  "Explore as casas abandonadas, use as sombras para se esconder das criaturas que caçam de quatro patas, e recupere as peças antes que seu tempo acabe.";
+const WALKIE_SCRIPT =
+  "Câmbio! Se alguém encontrar este gravador, ouça rápido! " +
+  "Quando o núcleo da Terra rompeu, a radiação mudou tudo e está roubando nossos anos de vida! " +
+  "Para fugir deste planeta, você precisa recuperar as três peças da Cápsula Aurora nas ruínas! " +
+  "Fale com os sobreviventes, economize a bateria da lanterna e se ouvir passos rápidos, entre num armário e apague a luz! " +
+  "Eles caçam de quatro patas e ouvem qualquer corrida! Não faça barulho, eu estou presa no setor norte e preciso que você...";
 
-function falarNarracaoIntro() {
+function selecionarVozFeminina() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const ptVoices = voices.filter(v => v.lang.toLowerCase().includes('pt'));
+
+  // Prioriza vozes femininas naturais em português
+  const preferredNames = ['francisca', 'thalita', 'maria', 'luciana', 'vitoria', 'google português', 'female', 'feminino'];
+  for (let name of preferredNames) {
+    const found = ptVoices.find(v => v.name.toLowerCase().includes(name));
+    if (found) return found;
+  }
+  return ptVoices[0] || null;
+}
+
+function falarNoWalkieTalkie() {
   if (!audioEnabled || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
 
-  const utter = new SpeechSynthesisUtterance(INTRO_NARRATION_TEXT);
+  const utter = new SpeechSynthesisUtterance(WALKIE_SCRIPT);
   utter.lang = 'pt-BR';
-  utter.rate = 1.04;
-  utter.pitch = 0.85; // Tom mais grave e cinematográfico
+  utter.rate = 1.24;  // Fala rápida e urgente de filme
+  utter.pitch = 1.18; // Tom feminino tenso
 
-  const voices = window.speechSynthesis.getVoices();
-  const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt'));
-  if (ptVoice) utter.voice = ptVoice;
+  const femVoice = selecionarVozFeminina();
+  if (femVoice) utter.voice = femVoice;
 
   window.speechSynthesis.speak(utter);
 }
 
 // ==========================================
-// SISTEMA DE ÁUDIO E PAISAGEM SONORA (WEB AUDIO API)
+// SISTEMA DE ÁUDIO E EFEITOS DE RÁDIO (WEB AUDIO API)
 // ==========================================
 let audioCtx = null;
 let audioEnabled = true;
@@ -79,6 +96,7 @@ let droneOsc2 = null;
 let droneGain = null;
 let engineOsc = null;
 let engineGain = null;
+let radioStaticGain = null;
 let tensionMusicTimer = 0;
 let tensionNoteIndex = 0;
 let heartbeatTimer = 0;
@@ -133,13 +151,15 @@ function iniciarAudio() {
   droneOsc1.start();
   droneOsc2.start();
 
-  // Vento sombrio contínuo (ruído filtrado)
+  // Gerador de ruído branco para vento e estática do walkie-talkie
   const bufferSize = audioCtx.sampleRate * 2;
   const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
   const output = noiseBuffer.getChannelData(0);
   for (let i = 0; i < bufferSize; i++) {
     output[i] = Math.random() * 2 - 1;
   }
+
+  // Vento ambiente
   const windSource = audioCtx.createBufferSource();
   windSource.buffer = noiseBuffer;
   windSource.loop = true;
@@ -157,6 +177,24 @@ function iniciarAudio() {
   windGain.connect(masterGain);
   windSource.start();
 
+  // Estática dedicada do Walkie-Talkie
+  const staticSource = audioCtx.createBufferSource();
+  staticSource.buffer = noiseBuffer;
+  staticSource.loop = true;
+
+  const staticFilter = audioCtx.createBiquadFilter();
+  staticFilter.type = 'bandpass';
+  staticFilter.frequency.value = 1850;
+  staticFilter.Q.value = 1.4;
+
+  radioStaticGain = audioCtx.createGain();
+  radioStaticGain.gain.value = 0;
+
+  staticSource.connect(staticFilter);
+  staticFilter.connect(radioStaticGain);
+  radioStaticGain.connect(masterGain);
+  staticSource.start();
+
   // Motor da nave
   engineOsc = audioCtx.createOscillator();
   engineGain = audioCtx.createGain();
@@ -172,6 +210,11 @@ function iniciarAudio() {
   engineFilter.connect(engineGain);
   engineGain.connect(masterGain);
   engineOsc.start();
+}
+
+function definirEstaticaRadio(volume) {
+  if (!audioCtx || !radioStaticGain) return;
+  radioStaticGain.gain.setTargetAtTime(audioEnabled ? volume : 0, audioCtx.currentTime, 0.04);
 }
 
 function alternarAudio() {
@@ -193,7 +236,7 @@ function atualizarMusicaDeTensao() {
   if (!audioEnabled || !audioCtx || !masterGain) return;
   if (audioCtx.state === 'suspended') return;
 
-  const ritmo = (isBeingChased || isLaunching) ? 24 : (lifeYears <= 12 ? 32 : 52);
+  const ritmo = (isBeingChased || isLaunching || inIntro) ? 24 : (lifeYears <= 12 ? 32 : 52);
   tensionMusicTimer++;
 
   if (tensionMusicTimer >= ritmo) {
@@ -214,9 +257,9 @@ function atualizarMusicaDeTensao() {
     subOsc.frequency.setValueAtTime(freq * 2, now);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(isBeingChased ? 720 : 380, now);
+    filter.frequency.setValueAtTime((isBeingChased || inIntro) ? 720 : 380, now);
 
-    const vol = isBeingChased ? 0.15 : 0.09;
+    const vol = (isBeingChased || inIntro) ? 0.14 : 0.09;
     noteGain.gain.setValueAtTime(0.001, now);
     noteGain.gain.linearRampToValueAtTime(vol, now + 0.04);
     noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
@@ -260,7 +303,37 @@ function tocarEfeitoSonoro(tipo) {
 
   const now = audioCtx.currentTime;
 
-  if (tipo === 'step') {
+  if (tipo === 'walkie_beep') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1420, now);
+    osc.frequency.setValueAtTime(1080, now + 0.05);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  } else if (tipo === 'monster_ambush_roar') {
+    // Rugido grave + guincho agudo sobrepostos para o corte do Ato 3
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(135, now);
+    osc.frequency.linearRampToValueAtTime(42, now + 1.1);
+    gain.gain.setValueAtTime(0.45, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+    osc.start(now);
+    osc.stop(now + 1.15);
+
+    const screech = audioCtx.createOscillator();
+    const sGain = audioCtx.createGain();
+    screech.type = 'sawtooth';
+    screech.frequency.setValueAtTime(520, now + 0.05);
+    screech.frequency.exponentialRampToValueAtTime(980, now + 0.25);
+    screech.frequency.exponentialRampToValueAtTime(190, now + 0.85);
+    sGain.gain.setValueAtTime(0.32, now + 0.05);
+    sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    screech.connect(sGain);
+    sGain.connect(masterGain);
+    screech.start(now + 0.05);
+    screech.stop(now + 0.9);
+  } else if (tipo === 'step') {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(210 + Math.random() * 40, now);
     osc.frequency.exponentialRampToValueAtTime(95, now + 0.055);
@@ -285,7 +358,6 @@ function tocarEfeitoSonoro(tipo) {
     osc.start(now);
     osc.stop(now + 0.48);
   } else if (tipo === 'quad_shriek') {
-    // Som assustador do monstro quadrúpede detectando presa
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(420, now);
     osc.frequency.exponentialRampToValueAtTime(860, now + 0.14);
@@ -295,7 +367,6 @@ function tocarEfeitoSonoro(tipo) {
     osc.start(now);
     osc.stop(now + 0.58);
   } else if (tipo === 'quad_gallop') {
-    // Patas batendo rápido no chão
     osc.type = 'sine';
     osc.frequency.setValueAtTime(125, now);
     osc.frequency.exponentialRampToValueAtTime(48, now + 0.09);
@@ -437,42 +508,39 @@ const escapeShip = {
   name: "Cápsula Orbital Aurora"
 };
 
-// Construções principais + Casas abandonadas destruídas
 const buildings = [
   {
     x: 240, y: 1460, w: 195, h: 165,
     doorSide: 'bottom', doorPos: 65, doorWidth: 44,
-    type: 'clinic', title: 'POSTO MÉDICO EM RUÍNAS', onFire: true, ruinedLevel: 2
+    type: 'clinic', title: 'POSTO MÉDICO EM RUÍNAS', onFire: true
   },
   {
     x: 1640, y: 1960, w: 205, h: 170,
     doorSide: 'top', doorPos: 68, doorWidth: 46,
-    type: 'warehouse', title: 'DEPÓSITO SUL DESTRUÍDO', onFire: true, ruinedLevel: 3
+    type: 'warehouse', title: 'DEPÓSITO SUL DESTRUÍDO', onFire: true
   },
   {
     x: 2380, y: 680, w: 195, h: 165,
     doorSide: 'left', doorPos: 52, doorWidth: 44,
-    type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true, ruinedLevel: 2
+    type: 'clinic', title: 'LABORATÓRIO LESTE', onFire: true
   },
-  // Casas abandonadas para explorar e ler diários
   {
     x: 920, y: 1180, w: 155, h: 135,
     doorSide: 'top', doorPos: 55, doorWidth: 40,
-    type: 'house', title: 'CASA ABANDONADA #01', onFire: false, ruinedLevel: 3
+    type: 'house', title: 'CASA ABANDONADA #01', onFire: false
   },
   {
     x: 1540, y: 1120, w: 160, h: 140,
     doorSide: 'left', doorPos: 48, doorWidth: 40,
-    type: 'house', title: 'RESIDÊNCIA COLAPSADA #02', onFire: true, ruinedLevel: 3
+    type: 'house', title: 'RESIDÊNCIA COLAPSADA #02', onFire: true
   },
   {
     x: 1080, y: 1680, w: 165, h: 140,
     doorSide: 'right', doorPos: 50, doorWidth: 40,
-    type: 'house', title: 'ABRIGO FAMILIAR #03', onFire: false, ruinedLevel: 2
+    type: 'house', title: 'ABRIGO FAMILIAR #03', onFire: false
   }
 ];
 
-// Esconderijos (Armários metálicos nas casas e escombros na rua)
 const hidingSpots = [
   { x: 942, y: 1205, w: 28, h: 36, type: 'locker', label: 'Armário Metálico' },
   { x: 1655, y: 1140, w: 28, h: 36, type: 'locker', label: 'Armário Enferrujado' },
@@ -489,7 +557,6 @@ const wreckedCars = [
   { x: 1780, y: 860, w: 72, h: 36, color: '#3d454d', onFire: true, dir: -1 }
 ];
 
-// Diários de sobreviventes dentro das casas
 const loreNotes = [
   {
     id: 1, x: 1020, y: 1275, read: false,
@@ -526,12 +593,10 @@ const itemsOnGround = [
   { id: 5, x: 1660, y: 1420, type: 'food', label: 'Pacote de Biscoitos', years: 2, hunger: 50, thirst: 0, collected: false },
   { id: 6, x: 2020, y: 980, type: 'food', label: 'Conserva Nutritiva', years: 2, hunger: 50, thirst: 0, collected: false },
 
-  // Pilhas para a lanterna
   { id: 9, x: 965, y: 1270, type: 'battery', label: 'Pilhas Alcalinas (+60% Bateria)', years: 1, battery: 60, collected: false },
   { id: 10, x: 1580, y: 1185, type: 'battery', label: 'Bateria de Lítio (+70% Bateria)', years: 1, battery: 70, collected: false },
   { id: 11, x: 1130, y: 1730, type: 'battery', label: 'Pilhas Alcalinas (+60% Bateria)', years: 1, battery: 60, collected: false },
 
-  // Sinalizadores extras
   { id: 7, x: 1020, y: 1220, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, collected: false },
   { id: 8, x: 1750, y: 1380, type: 'flare', label: 'Sinalizador Tático (+1)', years: 1, collected: false }
 ];
@@ -554,7 +619,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Shhh! Fale baixo... há criaturas quadrúpedes caçando nessa área. Se ouvir passos rápidos, entre num armário com [C] e apague a lanterna! Qual pista da nave você precisa?",
+    dialog: "Você ouviu aquela gravação no rádio? Era a Sara... ela não conseguiu sair do setor norte. Precisamos terminar o que ela começou! Qual peça da nave você quer localizar?",
     options: [
       {
         text: "Onde posso achar o Galão de Combustível?",
@@ -627,7 +692,6 @@ const zombies = [
   { x: 2060, y: 840, width: 26, height: 40, speed: 1.05, vx: 0, vy: 0, facing: -1, patrolTimer: 0, isMoving: false, groanTimer: 90 }
 ];
 
-// APENAS 2 MONSTROS QUADRÚPEDES RAROS E ASSUSTADORES
 const quadrupedMonsters = [
   {
     name: 'Rastejador Noturno',
@@ -671,7 +735,6 @@ function inicializarAmbiente() {
     });
   }
 
-  // Rachaduras e detalhes realistas no solo
   groundDetails = [];
   for (let i = 0; i < 90; i++) {
     groundDetails.push({
@@ -687,14 +750,26 @@ function iniciarCenaIntroducao() {
   inIntro = true;
   introTimer = 0;
   introShipAltitude = 380;
+  introCutTriggered = false;
+  introShockwaveRadius = 10;
+
+  const box = document.getElementById('intro-radio-box');
+  box.classList.remove('signal-lost');
+  document.getElementById('wave-bars').classList.remove('dead');
+  document.getElementById('radio-dot').style.background = '#22c55e';
+  document.getElementById('radio-status-text').innerText = 'WALKIE-TALKIE — FREQUÊNCIA 104.8 MHz (GRAVAÇÃO RECUPERADA)';
   document.getElementById('intro-overlay').style.display = 'flex';
-  falarNarracaoIntro();
+
+  tocarEfeitoSonoro('walkie_beep');
+  definirEstaticaRadio(0.06);
+  falarNoWalkieTalkie();
 }
 
 function pularIntroducao() {
   if (!inIntro) return;
   inIntro = false;
   introShipAltitude = 0;
+  definirEstaticaRadio(0);
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -707,40 +782,103 @@ function atualizarCenaIntroducao() {
   document.getElementById('intro-timer').innerText = remaining + 's';
 
   const sub = document.getElementById('intro-subtitle');
+  const actLabel = document.getElementById('intro-act-label');
 
-  if (introTimer === 1) {
-    sub.innerText = "Ano 2089. O colapso do núcleo terrestre liberou uma radiação que consome os anos de vida humana...";
-  } else if (introTimer === 190) {
-    sub.innerText = "...e deformou aqueles que ficaram para trás. Durante o pouso forçado da Cápsula Aurora, 3 módulos se perderam.";
-  } else if (introTimer === 390) {
-    sub.innerText = "Explore as casas destruídas, use [C] para se esconder das criaturas de quatro patas e apague a lanterna [F] no escuro.";
+  // ATO 1 (0s - 8s): O Colapso do Núcleo
+  if (introTimer < 480) {
+    actLabel.innerText = 'ATO I — O COLAPSO DO NÚCLEO';
+    introShockwaveRadius += 3.2;
+    if (introTimer === 1) {
+      sub.innerText = '"Câmbio! Se alguém encontrar este gravador, ouça rápido! Quando o núcleo da Terra rompeu, a radiação mudou tudo e está roubando nossos anos de vida!"';
+    }
+    if (introTimer === 120 || introTimer === 320) {
+      lightningAlpha = 0.7;
+      tocarEfeitoSonoro('thunder');
+      screenShake = 8;
+    }
+    // Câmera sobrevoando as ruínas em chamas
+    camera.x = 750 + (introTimer * 0.9) - canvas.width / 2;
+    camera.y = 1150 - canvas.height / 2;
   }
+  // ATO 2 (8s - 18s): As Instruções de Sobrevivência
+  else if (introTimer < 1080) {
+    actLabel.innerText = 'ATO II — AS REGRAS DE SOBREVIVÊNCIA';
+    if (introTimer === 480) {
+      tocarEfeitoSonoro('walkie_beep');
+      sub.innerText = '"Para fugir deste planeta, recupere as três peças da Cápsula Aurora! Economize a bateria da lanterna e se ouvir passos rápidos, entre num armário e apague a luz!"';
+    }
+    // Câmera desliza pelas casas destruídas e esconderijos
+    const t2 = introTimer - 480;
+    camera.x = 1200 + (t2 * 1.1) - canvas.width / 2;
+    camera.y = 1180 + Math.sin(t2 * 0.01) * 140 - canvas.height / 2;
+  }
+  // ATO 3 (18s - 24s): A Emboscada e o Corte Brusco com Barulho de Monstro
+  else if (introTimer < 1440) {
+    actLabel.innerText = 'ATO III — EMBOSCADA NO SETOR NORTE';
+    if (introTimer === 1080) {
+      tocarEfeitoSonoro('walkie_beep');
+      sub.innerText = '"Eles caçam de quatro patas e ouvem qualquer corrida! Não faça barulho, eu estou presa no setor norte e preciso que você—"';
+    }
 
-  if (introShipAltitude > 0) {
-    introShipAltitude = Math.max(0, introShipAltitude - 1.85);
-    liftParticles.push({
-      x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 40,
-      y: escapeShip.y + escapeShip.height - introShipAltitude + 6,
-      vx: (Math.random() - 0.5) * 3,
-      vy: 1.2 + Math.random() * 2,
-      life: 30,
-      size: 9 + Math.random() * 12
-    });
-    if (introShipAltitude === 0) {
-      screenShake = 20;
-      tocarEfeitoSonoro('crash_land');
+    // Câmera foca no monstro quadrúpede avançando
+    const m = quadrupedMonsters[0];
+    camera.x = (m.x + 24) - canvas.width / 2;
+    camera.y = (m.y + 15) - canvas.height / 2;
+
+    // Aos 22.8s (frame 1370): CORTA A FALA NO MEIO E TOCA O BARULHO DE MONSTRO!
+    if (introTimer >= 1370 && !introCutTriggered) {
+      introCutTriggered = true;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Corta a voz dela bruscamente!
+      }
+      tocarEfeitoSonoro('monster_ambush_roar');
+      definirEstaticaRadio(0.22); // Estática pesada de rádio caído
+      screenShake = 24;
+      flashDamage = 14;
+
+      const box = document.getElementById('intro-radio-box');
+      box.classList.add('signal-lost');
+      document.getElementById('wave-bars').classList.add('dead');
+      document.getElementById('radio-dot').style.background = '#ef4444';
+      document.getElementById('radio-status-text').innerText = 'SINAL INTERROMPIDO — TRANSMISSÃO PERDIDA';
+      sub.innerText = '[RUGIDO ENSUREDECEDOR E ESTÁTICA PESADA... SINAL PERDIDO]';
     }
   }
+  // ATO 4 (24s - 30s): Pouso de Emergência da Cápsula Aurora
+  else {
+    actLabel.innerText = 'ATO IV — POUSO DA CÁPSULA AURORA';
+    definirEstaticaRadio(0.04);
 
-  for (let p of liftParticles) {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
+    if (introTimer === 1440) {
+      sub.innerText = 'ÚLTIMO REGISTRO DE ÁUDIO ENCERRADO. Iniciando protocolo de sobrevivência na plataforma Aurora...';
+    }
+
+    if (introShipAltitude > 0) {
+      introShipAltitude = Math.max(0, introShipAltitude - 1.5);
+      liftParticles.push({
+        x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 40,
+        y: escapeShip.y + escapeShip.height - introShipAltitude + 6,
+        vx: (Math.random() - 0.5) * 3,
+        vy: 1.2 + Math.random() * 2,
+        life: 30,
+        size: 9 + Math.random() * 12
+      });
+      if (introShipAltitude === 0) {
+        screenShake = 18;
+        tocarEfeitoSonoro('crash_land');
+      }
+    }
+
+    for (let p of liftParticles) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life--;
+    }
+    liftParticles = liftParticles.filter(p => p.life > 0);
+
+    camera.x = (escapeShip.x + escapeShip.width / 2) - canvas.width / 2;
+    camera.y = (escapeShip.y + escapeShip.height / 2 + 40) - canvas.height / 2;
   }
-  liftParticles = liftParticles.filter(p => p.life > 0);
-
-  camera.x = (escapeShip.x + escapeShip.width / 2) - canvas.width / 2;
-  camera.y = (escapeShip.y + escapeShip.height / 2 + 40) - canvas.height / 2;
 
   if (introTimer >= INTRO_DURATION) {
     pularIntroducao();
@@ -750,7 +888,6 @@ function atualizarCenaIntroducao() {
 function emitirOndaSonora(x, y, maxRadius) {
   soundWaves.push({ x, y, radius: 8, maxRadius, alpha: 0.65 });
 
-  // Alerta monstros quadrúpedes se o som alcançar eles
   for (let m of quadrupedMonsters) {
     const dist = Math.hypot((m.x + m.width / 2) - x, (m.y + m.height / 2) - y);
     if (dist <= maxRadius) {
@@ -1042,9 +1179,8 @@ function atualizarAmbienteEClima() {
   }
   soundWaves = soundWaves.filter(sw => sw.alpha > 0 && sw.radius < sw.maxRadius);
 
-  // Relâmpagos periódicos iluminando o escuro
   lightningTimer++;
-  if (lightningTimer > 520 && Math.random() < 0.008) {
+  if (!inIntro && lightningTimer > 520 && Math.random() < 0.008) {
     lightningTimer = 0;
     lightningAlpha = 0.65;
     setTimeout(() => {
@@ -1093,7 +1229,6 @@ function atualizarAnimacaoDecolagem() {
 }
 
 function atualizarFomeSedeBateria() {
-  // Consumo gradual da bateria da lanterna
   if (flashlightOn && battery > 0) {
     battery = Math.max(0, battery - 0.022);
     if (battery === 0) {
@@ -1293,7 +1428,6 @@ function atualizarJogador() {
         life: 90
       });
 
-      // Correr emite ondas sonoras visíveis que atraem criaturas próximas
       if (player.isSprinting) {
         emitirOndaSonora(player.x + player.width / 2, player.y + player.height / 2, 260);
       }
@@ -1340,7 +1474,6 @@ function obterAlvoCriatura(ex, ey, px, py, detectRadius) {
     }
   }
 
-  // Se o jogador estiver escondido com a lanterna desligada, fica invisível!
   if (isHiding && !flashlightOn) {
     return null;
   }
@@ -1370,7 +1503,6 @@ function atualizarZumbis() {
     const px = player.x + player.width / 2;
     const py = player.y + player.height / 2;
 
-    // Gemidos periódicos quando o jogador está por perto
     z.groanTimer--;
     if (z.groanTimer <= 0) {
       z.groanTimer = 240 + Math.floor(Math.random() * 220);
@@ -1468,7 +1600,6 @@ function atualizarMonstrosQuadrupedes() {
         tocarEfeitoSonoro('quad_gallop');
       }
     } else if (m.investigateTimer > 0 && m.investigateX !== null) {
-      // Vai investigar onde ouviu passos correndo
       m.investigateTimer--;
       const dx = m.investigateX - mx;
       const dy = m.investigateY - my;
@@ -1873,22 +2004,18 @@ function desenharConstrucaoInterior(b) {
 
   const isInside = jogadorDentroDe(b);
 
-  // Sombra projetada
   ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
   ctx.fillRect(bx + 10, by + 12, b.w, b.h);
 
-  // Piso de concreto sujo/rachado
   ctx.fillStyle = b.type === 'clinic' ? '#262d33' : (b.type === 'house' ? '#27201b' : '#241d18');
   ctx.fillRect(bx, by, b.w, b.h);
 
-  // Manchas de fuligem e umidade no piso
   ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
   ctx.beginPath();
   ctx.arc(bx + b.w * 0.35, by + b.h * 0.45, 24, 0, Math.PI * 2);
   ctx.arc(bx + b.w * 0.72, by + b.h * 0.68, 18, 0, Math.PI * 2);
   ctx.fill();
 
-  // Rachaduras no piso
   ctx.strokeStyle = 'rgba(10, 8, 6, 0.55)';
   ctx.lineWidth = 1.3;
   ctx.beginPath();
@@ -1899,9 +2026,7 @@ function desenharConstrucaoInterior(b) {
   ctx.lineTo(bx + b.w - 65, by + b.h - 55);
   ctx.stroke();
 
-  // Mobília destruída e escombros internos
   if (b.type === 'house') {
-    // Mesa quebrada tombada
     ctx.fillStyle = '#442c1e';
     ctx.save();
     ctx.translate(bx + b.w - 46, by + 42);
@@ -1911,7 +2036,6 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeRect(-16, -10, 32, 20);
     ctx.restore();
 
-    // Tapete rasgado
     ctx.fillStyle = 'rgba(127, 29, 29, 0.35)';
     ctx.fillRect(bx + 45, by + 55, 50, 34);
   } else if (b.type === 'clinic') {
@@ -1926,13 +2050,11 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeRect(bx + 18, by + 20, 26, 26);
   }
 
-  // Tijolos e escombros caídos junto às paredes
   ctx.fillStyle = '#4a3a30';
   ctx.fillRect(bx + 14, by + b.h - 22, 9, 7);
   ctx.fillRect(bx + b.w - 28, by + 16, 11, 8);
   ctx.fillRect(bx + b.w - 22, by + b.h - 26, 8, 8);
 
-  // Paredes com aparência desgastada
   const walls = obterParedesConstrucao(b);
   ctx.fillStyle = '#4c3b31';
   ctx.strokeStyle = '#140f0c';
@@ -1945,7 +2067,6 @@ function desenharConstrucaoInterior(b) {
     ctx.strokeRect(wx, wy, w.w, w.h);
   }
 
-  // Soleira da porta
   ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
   if (b.doorSide === 'bottom') {
     ctx.fillRect(bx + b.doorPos, by + b.h - 10, b.doorWidth, 10);
@@ -1974,7 +2095,6 @@ function desenharTetosConstrucoes() {
     const by = b.y - camera.y;
     if (bx < -250 || bx > canvas.width + 250 || by < -250 || by > canvas.height + 250) continue;
 
-    // Telhado desabado irregular com vigas expostas
     ctx.fillStyle = 'rgba(30, 23, 19, 0.9)';
     ctx.beginPath();
     ctx.rect(bx + 10, by + 10, b.w - 20, b.h - 20);
@@ -1985,7 +2105,6 @@ function desenharTetosConstrucoes() {
     ctx.closePath();
     ctx.fill('evenodd');
 
-    // Vigas de madeira quebradas cruzando o buraco do telhado
     ctx.strokeStyle = '#1c140f';
     ctx.lineWidth = 4;
     ctx.beginPath();
@@ -2010,12 +2129,10 @@ function desenharEsconderijos() {
       ctx.fillRect(sx, sy, hs.w, hs.h);
       ctx.strokeRect(sx, sy, hs.w, hs.h);
 
-      // Frestas de ventilação do armário
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(sx + 6, sy + 7, hs.w - 12, 3);
       ctx.fillRect(sx + 6, sy + 13, hs.w - 12, 3);
     } else {
-      // Escombros de concreto
       ctx.fillStyle = '#44403c';
       ctx.strokeStyle = '#1c1917';
       ctx.lineWidth = 1.8;
@@ -2042,7 +2159,6 @@ function desenharDiariosChao() {
     ctx.arc(nx, ny, 11, 0, Math.PI * 2);
     ctx.fill();
 
-    // Folha de papel amassada
     ctx.fillStyle = note.read ? '#a8a29e' : '#fef08a';
     ctx.fillRect(nx - 6, ny - 7, 12, 14);
     ctx.fillStyle = '#44403c';
@@ -2120,14 +2236,14 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  const verticalOffset = inIntro ? introShipAltitude : shipLiftOffset;
+  const verticalOffset = (inIntro && introTimer >= 1440) ? introShipAltitude : (inIntro ? 450 : shipLiftOffset);
   const shipY = sy - verticalOffset;
-  const shakeX = (isLaunching || playerBoardedShip || (inIntro && introShipAltitude > 0)) ? (Math.random() - 0.5) * 4.5 : 0;
+  const shakeX = (isLaunching || playerBoardedShip || (inIntro && introTimer >= 1440 && introShipAltitude > 0)) ? (Math.random() - 0.5) * 4.5 : 0;
   const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
   const cx = sx + escapeShip.width / 2 + shakeX;
   const cy = shipY + escapeShip.height / 2 + shakeY;
 
-  if (isLaunching || playerBoardedShip || (inIntro && introShipAltitude > 0)) {
+  if (isLaunching || playerBoardedShip || (inIntro && introTimer >= 1440 && introShipAltitude > 0)) {
     const scaleFlame = playerBoardedShip ? 1.5 : 1.1;
     desenharFogoAnimado(cx - 18, shipY + escapeShip.height + 6, scaleFlame);
     desenharFogoAnimado(cx + 18, shipY + escapeShip.height + 6, scaleFlame);
@@ -2214,7 +2330,6 @@ function desenharNaveEspacial() {
 }
 
 function desenharCenario() {
-  // Detalhes de rachaduras e crateras no solo
   for (let gd of groundDetails) {
     const gx = gd.x - camera.x;
     const gy = gd.y - camera.y;
@@ -2254,12 +2369,20 @@ function desenharCenario() {
     ctx.fill();
   }
 
-  // Ondas sonoras visuais ao correr
   for (let sw of soundWaves) {
     ctx.strokeStyle = `rgba(255, 255, 255, ${sw.alpha * 0.32})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(sw.x - camera.x, sw.y - camera.y, sw.radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Onda de radiação do Ato 1 na abertura
+  if (inIntro && introTimer < 480) {
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.35)';
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.arc(canvas.width * 0.3, canvas.height * 0.4, introShockwaveRadius % 1200, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -2287,9 +2410,6 @@ function desenharSinalizadores() {
   }
 }
 
-// ==========================================
-// ITENS NO CHÃO
-// ==========================================
 function desenharItemChao(item) {
   if (item.collected) return;
   const screenX = item.x - camera.x;
@@ -2425,9 +2545,6 @@ function desenharItemChao(item) {
   }
 }
 
-// ==========================================
-// MONSTRO QUADRÚPEDE ESQUELÉTICO E ASSUSTADOR
-// ==========================================
 function desenharMonstroQuadrupede(m) {
   const screenX = m.x - camera.x;
   const screenY = m.y - camera.y;
@@ -2435,15 +2552,15 @@ function desenharMonstroQuadrupede(m) {
   if (screenX < -100 || screenX > canvas.width + 100 || screenY < -100 || screenY > canvas.height + 100) return;
 
   const facing = m.facing || 1;
-  const cycle = animFrame * (m.wasChasing ? 0.42 : 0.18);
-  const strideFront = m.isMoving ? Math.sin(cycle) * 8 : 0;
-  const strideBack = m.isMoving ? Math.cos(cycle) * 8 : 0;
-  const spineWave = m.isMoving ? Math.sin(cycle * 2) * 2.5 : 0;
+  const isAnimating = m.isMoving || (inIntro && introTimer >= 1080 && introTimer < 1440);
+  const cycle = animFrame * ((m.wasChasing || inIntro) ? 0.42 : 0.18);
+  const strideFront = isAnimating ? Math.sin(cycle) * 8 : 0;
+  const strideBack = isAnimating ? Math.cos(cycle) * 8 : 0;
+  const spineWave = isAnimating ? Math.sin(cycle * 2) * 2.5 : 0;
 
   const cx = screenX + m.width / 2;
   const cy = screenY + m.height / 2;
 
-  // Sombra rastejante no chão
   ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
   ctx.beginPath();
   ctx.ellipse(cx, cy + 12, 24, 6, 0, 0, Math.PI * 2);
@@ -2452,16 +2569,14 @@ function desenharMonstroQuadrupede(m) {
   ctx.strokeStyle = '#09090b';
   ctx.lineWidth = 2.2;
 
-  // Patas traseiras articuladas
   const backHipX = cx - facing * 14;
   const backFootX = backHipX - facing * 6 + strideBack;
   ctx.beginPath();
   ctx.moveTo(backHipX, cy + spineWave);
-  ctx.lineTo(backHipX - facing * 10, cy - 6); // Joelho pontudo para cima
+  ctx.lineTo(backHipX - facing * 10, cy - 6);
   ctx.lineTo(backFootX, cy + 13);
   ctx.stroke();
 
-  // Patas dianteiras longas com garras
   const frontShoulderX = cx + facing * 13;
   const frontFootX = frontShoulderX + facing * 7 + strideFront;
   ctx.beginPath();
@@ -2470,7 +2585,6 @@ function desenharMonstroQuadrupede(m) {
   ctx.lineTo(frontFootX, cy + 13);
   ctx.stroke();
 
-  // Corpo esquelético curvado
   ctx.fillStyle = '#18181b';
   ctx.beginPath();
   ctx.moveTo(cx - facing * 18, cy + 2 + spineWave);
@@ -2481,7 +2595,6 @@ function desenharMonstroQuadrupede(m) {
   ctx.fill();
   ctx.stroke();
 
-  // Costelas / espinhos dorsais pálidos
   ctx.strokeStyle = '#71717a';
   ctx.lineWidth = 1.4;
   for (let r = -8; r <= 6; r += 5) {
@@ -2491,7 +2604,6 @@ function desenharMonstroQuadrupede(m) {
     ctx.stroke();
   }
 
-  // Cabeça alongada próxima ao chão
   const headX = cx + facing * 20;
   const headY = cy + 2 - spineWave;
   ctx.fillStyle = '#27272a';
@@ -2502,24 +2614,19 @@ function desenharMonstroQuadrupede(m) {
   ctx.fill();
   ctx.stroke();
 
-  // Olhos predadores brilhando no escuro
   ctx.fillStyle = '#ef4444';
   ctx.beginPath();
   ctx.arc(headX + facing * 4, headY - 1.5, 2.2, 0, Math.PI * 2);
   ctx.fill();
 
-  // Halo nos olhos
   ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
   ctx.beginPath();
   ctx.arc(headX + facing * 4, headY - 1.5, 6, 0, Math.PI * 2);
   ctx.fill();
 }
 
-// ==========================================
-// PERSONAGENS: JOGADOR, NPCs E ZUMBIS REALISTAS
-// ==========================================
 function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = false, isNPC = false) {
-  if (!isZombie && !isNPC && isHiding) return; // Oculto dentro do esconderijo
+  if (!isZombie && !isNPC && isHiding) return;
 
   const screenX = worldX - camera.x;
   const screenY = worldY - camera.y;
@@ -2607,7 +2714,6 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
       ctx.fillRect(cx - 3.5, torsoY + 4, 7, 2);
     }
   } else {
-    // Roupas rasgadas e manchas sombrias
     ctx.fillStyle = '#4c1d1d';
     ctx.fillRect(cx - 3 + torsoOffset, torsoY + 5, 6, 4);
   }
@@ -2662,9 +2768,6 @@ function desenharPersonagemDetalhado(worldX, worldY, char, isMoving, isZombie = 
   }
 }
 
-// ==========================================
-// SONAR TÁTICO (MINIMAPA)
-// ==========================================
 function desenharMinimapa() {
   if (!miniCtx) return;
 
@@ -2764,7 +2867,6 @@ function desenharMinimapa() {
     }
   }
 
-  // Monstros quadrúpedes só aparecem no sonar quando correm ou durante um relâmpago!
   for (let m of quadrupedMonsters) {
     if (!m.wasChasing && lightningAlpha <= 0.1) continue;
     const mx = cx + (m.x - player.x) * scale;
@@ -2783,9 +2885,6 @@ function desenharMinimapa() {
   miniCtx.fill();
 }
 
-// ==========================================
-// ILUMINAÇÃO REALISTA + LANTERNA COM BATERIA + RELÂMPAGOS
-// ==========================================
 function desenharIluminacaoEClima() {
   for (let p of ashParticles) {
     ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.25)';
@@ -2794,7 +2893,29 @@ function desenharIluminacaoEClima() {
     ctx.fill();
   }
 
-  if (inIntro) return;
+  // Durante o Ato 3 da introdução, escurece ao redor do monstro quadrúpede para destaque dramático
+  if (inIntro) {
+    if (introTimer >= 1080 && introTimer < 1440) {
+      const m = quadrupedMonsters[0];
+      const mx = m.x + m.width / 2 - camera.x;
+      const my = m.y + m.height / 2 - camera.y;
+      const spot = ctx.createRadialGradient(mx, my, 50, mx, my, 260);
+      spot.addColorStop(0, 'rgba(0,0,0,0.1)');
+      spot.addColorStop(1, 'rgba(0,0,0,0.88)');
+      ctx.fillStyle = spot;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (lightningAlpha > 0) {
+      ctx.fillStyle = `rgba(220, 235, 255, ${lightningAlpha * 0.28})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (flashDamage > 0) {
+      ctx.fillStyle = `rgba(255, 0, 0, ${flashDamage * 0.06})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      flashDamage--;
+    }
+    return;
+  }
 
   const screenPx = player.x + player.width / 2 - camera.x;
   const screenPy = player.y + player.height / 2 - camera.y;
@@ -2804,7 +2925,6 @@ function desenharIluminacaoEClima() {
   lightCanvas.height = canvas.height;
   const lCtx = lightCanvas.getContext('2d');
 
-  // Se houver um relâmpago, reduz a escuridão temporariamente
   const baseDarkness = lightningAlpha > 0 ? Math.max(0.15, 0.85 - lightningAlpha) : 0.86;
   lCtx.fillStyle = `rgba(5, 4, 3, ${baseDarkness})`;
   lCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
@@ -2819,7 +2939,6 @@ function desenharIluminacaoEClima() {
   lCtx.arc(screenPx, screenPy, 115, 0, Math.PI * 2);
   lCtx.fill();
 
-  // Lanterna pisca quando a bateria está abaixo de 20%
   const batteryFlicker = battery < 20 ? (Math.sin(animFrame * 0.7) > -0.3) : true;
   if (flashlightOn && battery > 0 && batteryFlicker && !playerBoardedShip) {
     const beamLen = battery < 25 ? 240 : 340;
