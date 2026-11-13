@@ -40,52 +40,50 @@ let soundWaves = [];
 let groundDetails = [];
 
 // ==========================================
-// CENA DE VÍDEO GRAVADO NO CELULAR (30 SEGUNDOS)
+// CENA DE VÍDEO MILITAR EM TELA CHEIA (24 SEGUNDOS)
 // ==========================================
 let inIntro = false;
 let introTimer = 0;
-const INTRO_DURATION = 1800; // 30 segundos exatos a 60 FPS
-let introShipAltitude = 380;
+const INTRO_DURATION = 1440; // 24 segundos exatos (somente o vídeo dela falando, sem cena do foguete)
 let introCutTriggered = false;
-let introShockwaveRadius = 10;
 let speechTimeoutIds = [];
 
-// Frases curtas com pausas naturais de respiração para evitar tom robótico
+// Frases limpas e diretas com clique de walkie-talkie nas pausas
 const PHONE_VIDEO_LINES = [
   {
-    delayMs: 300,
-    rate: 1.08,
-    pitch: 1.08,
-    text: "Gente... se alguém achar esse celular... olha o que aconteceu com a cidade.",
-    caption: "\"Gente... se alguém achar esse celular... olha o que aconteceu com a cidade.\""
+    delayMs: 350,
+    rate: 1.04,
+    pitch: 1.05,
+    text: "Câmbio! Aqui é a Sargento Sara. Se você recebeu esse vídeo, preste muita atenção.",
+    caption: "\"[CÂMBIO] Aqui é a Sargento Sara. Se você recebeu esse vídeo, preste muita atenção.\""
   },
   {
     delayMs: 5200,
+    rate: 1.06,
+    pitch: 1.06,
+    text: "O núcleo rompeu e a radiação está consumindo nossos anos de vida rapidamente.",
+    caption: "\"O núcleo rompeu e a radiação está consumindo nossos anos de vida rapidamente.\""
+  },
+  {
+    delayMs: 10400,
+    rate: 1.08,
+    pitch: 1.08,
+    text: "A Nave Aurora está na plataforma norte, mas faltam três peças espalhadas nas ruínas.",
+    caption: "\"A Nave Aurora está na plataforma norte, mas faltam três peças espalhadas nas ruínas.\""
+  },
+  {
+    delayMs: 15600,
     rate: 1.12,
     pitch: 1.10,
-    text: "O núcleo rompeu, e essa radiação tá roubando nossos anos de vida.",
-    caption: "\"O núcleo rompeu, e essa radiação tá roubando nossos anos de vida.\""
-  },
-  {
-    delayMs: 10200,
-    rate: 1.16,
-    pitch: 1.12,
-    text: "Escuta rápido! Tem uma cápsula da Aurora no setor norte, mas faltam três peças nas ruínas.",
-    caption: "\"Escuta rápido! Tem uma cápsula da Aurora no setor norte, mas faltam três peças nas ruínas.\""
-  },
-  {
-    delayMs: 15800,
-    rate: 1.18,
-    pitch: 1.14,
-    text: "Economiza a lanterna, e se ouvir passos rápidos, entra num armário!",
-    caption: "\"Economiza a lanterna, e se ouvir passos rápidos, entra num armário!\""
+    text: "Economize a lanterna e se esconda nos armários se ouvir passos rápidos! Câmbio—",
+    caption: "\"Economize a lanterna e se esconda nos armários se ouvir passos rápidos! Câmbio—\""
   },
   {
     delayMs: 20400,
-    rate: 1.24,
-    pitch: 1.20,
-    text: "Espera... tem alguma coisa aqui! Eles andam de quatro patas e... não, não, não!",
-    caption: "\"Espera... tem alguma coisa aqui! Eles andam de quatro patas e... não, não, NÃO—\""
+    rate: 1.18,
+    pitch: 1.15,
+    text: "Espera... movimento no perímetro! Eles andam de quatro patas! Não, não, NÃO!",
+    caption: "\"Espera... movimento no perímetro! Eles andam de quatro patas! Não, não, NÃO—\""
   }
 ];
 
@@ -94,7 +92,6 @@ function selecionarVozFemininaNatural() {
   const voices = window.speechSynthesis.getVoices();
   const ptVoices = voices.filter(v => v.lang.toLowerCase().includes('pt'));
 
-  // Prioriza vozes neurais naturais (menos robóticas) em português
   const naturalPriority = [
     'francisca online',
     'thalita online',
@@ -133,11 +130,21 @@ function agendarFalasDoCelular() {
       if (!inIntro || introCutTriggered || !audioEnabled) return;
       document.getElementById('intro-subtitle').innerText = line.caption;
 
+      // Clique limpo de transmissão walkie-talkie antes da fala
+      tocarEfeitoSonoro('walkie_ptt_in');
+
       const utter = new SpeechSynthesisUtterance(line.text);
       utter.lang = 'pt-BR';
       utter.rate = line.rate;
       utter.pitch = line.pitch;
+      utter.volume = 1.0;
       if (chosenVoice) utter.voice = chosenVoice;
+
+      utter.onend = () => {
+        if (inIntro && !introCutTriggered && audioEnabled) {
+          tocarEfeitoSonoro('walkie_ptt_out');
+        }
+      };
 
       window.speechSynthesis.speak(utter);
     }, line.delayMs);
@@ -211,7 +218,6 @@ function iniciarAudio() {
   droneOsc1.start();
   droneOsc2.start();
 
-  // Gerador de ruído branco para vento e interferência de vídeo corrompido
   const bufferSize = audioCtx.sampleRate * 2;
   const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
   const output = noiseBuffer.getChannelData(0);
@@ -229,21 +235,22 @@ function iniciarAudio() {
   windFilter.Q.value = 2.5;
 
   const windGain = audioCtx.createGain();
-  windGain.gain.value = 0.05;
+  windGain.gain.value = 0.04;
 
   windSource.connect(windFilter);
   windFilter.connect(windGain);
   windGain.connect(masterGain);
   windSource.start();
 
+  // Estática suave estilo rádio walkie-talkie (bem baixa para manter a voz limpa)
   const staticSource = audioCtx.createBufferSource();
   staticSource.buffer = noiseBuffer;
   staticSource.loop = true;
 
   const staticFilter = audioCtx.createBiquadFilter();
   staticFilter.type = 'bandpass';
-  staticFilter.frequency.value = 1600;
-  staticFilter.Q.value = 1.2;
+  staticFilter.frequency.value = 1900;
+  staticFilter.Q.value = 1.6;
 
   radioStaticGain = audioCtx.createGain();
   radioStaticGain.gain.value = 0;
@@ -293,7 +300,7 @@ function atualizarMusicaDeTensao() {
   if (!audioEnabled || !audioCtx || !masterGain) return;
   if (audioCtx.state === 'suspended') return;
 
-  const ritmo = (isBeingChased || isLaunching || inIntro) ? 24 : (lifeYears <= 12 ? 32 : 52);
+  const ritmo = (isBeingChased || isLaunching || inIntro) ? 26 : (lifeYears <= 12 ? 32 : 52);
   tensionMusicTimer++;
 
   if (tensionMusicTimer >= ritmo) {
@@ -314,9 +321,10 @@ function atualizarMusicaDeTensao() {
     subOsc.frequency.setValueAtTime(freq * 2, now);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime((isBeingChased || inIntro) ? 680 : 380, now);
+    filter.frequency.setValueAtTime((isBeingChased || inIntro) ? 620 : 380, now);
 
-    const vol = (isBeingChased || inIntro) ? 0.13 : 0.09;
+    // Durante a fala da intro, mantém a música de fundo mais discreta para voz bem limpa
+    const vol = inIntro ? 0.055 : (isBeingChased ? 0.13 : 0.09);
     noteGain.gain.setValueAtTime(0.001, now);
     noteGain.gain.linearRampToValueAtTime(vol, now + 0.04);
     noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
@@ -360,16 +368,25 @@ function tocarEfeitoSonoro(tipo) {
 
   const now = audioCtx.currentTime;
 
-  if (tipo === 'phone_rec_start') {
+  if (tipo === 'walkie_ptt_in') {
+    // Clique característico de apertar o botão do walkie-talkie
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(980, now);
-    osc.frequency.setValueAtTime(1320, now + 0.06);
-    gain.gain.setValueAtTime(0.16, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.frequency.setValueAtTime(1450, now);
+    osc.frequency.setValueAtTime(1950, now + 0.035);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc.start(now);
-    osc.stop(now + 0.14);
+    osc.stop(now + 0.08);
+  } else if (tipo === 'walkie_ptt_out') {
+    // Bi-bi curto ao soltar o botão do walkie-talkie
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1250, now);
+    osc.frequency.setValueAtTime(920, now + 0.04);
+    gain.gain.setValueAtTime(0.11, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.start(now);
+    osc.stop(now + 0.09);
   } else if (tipo === 'monster_ambush_roar') {
-    // Rugido grave + guincho agudo + impacto do celular caindo
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(135, now);
     osc.frequency.linearRampToValueAtTime(40, now + 1.15);
@@ -435,7 +452,7 @@ function tocarEfeitoSonoro(tipo) {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(95, now);
     osc.frequency.exponentialRampToValueAtTime(34, now + 1.1);
-    gain.gain.setValueAtTime(0.26, now);
+    gain.gain.setValueAtTime(0.22, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
     osc.start(now);
     osc.stop(now + 1.15);
@@ -462,14 +479,6 @@ function tocarEfeitoSonoro(tipo) {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     osc.start(now);
     osc.stop(now + 0.05);
-  } else if (tipo === 'crash_land') {
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.exponentialRampToValueAtTime(38, now + 0.7);
-    gain.gain.setValueAtTime(0.38, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-    osc.start(now);
-    osc.stop(now + 0.75);
   } else if (tipo === 'item') {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(523.25, now);
@@ -676,7 +685,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Você assistiu ao vídeo no celular da Sara? Achamos o aparelho perto do setor norte... Ela tentou avisar todo mundo. Precisamos terminar o que ela começou! Qual peça da nave você quer localizar?",
+    dialog: "Você viu a transmissão da Sargento Sara? Ela tentou segurar o perímetro norte até o fim... Precisamos terminar o que ela começou! Qual peça da nave você quer localizar?",
     options: [
       {
         text: "Onde posso achar o Galão de Combustível?",
@@ -716,7 +725,7 @@ const npcs = [
     vy: 0,
     moveTimer: 0,
     isTalking: false,
-    dialog: "Aqueles monstros de quatro patas reagem ao som de corrida e à luz, exatamente como a Sara alertou no vídeo. Eu vi onde guardaram o Traje Criogênico e o Combustível.",
+    dialog: "Aqueles monstros de quatro patas reagem ao som de corrida e à luz, exatamente como a Sargento Sara alertou no vídeo. Eu vi onde guardaram o Traje Criogênico e o Combustível.",
     options: [
       {
         text: "Onde posso encontrar o Traje Criogênico?",
@@ -806,25 +815,23 @@ function inicializarAmbiente() {
 function iniciarCenaIntroducao() {
   inIntro = true;
   introTimer = 0;
-  introShipAltitude = 380;
   introCutTriggered = false;
-  introShockwaveRadius = 10;
 
   const phoneFrame = document.getElementById('phone-frame');
-  phoneFrame.classList.remove('dropped', 'hidden-phone');
+  phoneFrame.classList.remove('dropped');
   document.getElementById('rec-dot').style.background = '#ef4444';
   document.getElementById('rec-label').innerText = 'REC';
-  document.getElementById('phone-signal').innerText = 'SEM REDE';
-  document.getElementById('intro-overlay').style.display = 'flex';
+  document.getElementById('phone-signal').innerText = 'WALKIE-TALKIE LINK';
+  document.getElementById('intro-overlay').style.display = 'block';
 
-  tocarEfeitoSonoro('phone_rec_start');
+  // Estática de rádio bem suave (0.015) para manter a voz super limpa
+  definirEstaticaRadio(0.015);
   agendarFalasDoCelular();
 }
 
 function pularIntroducao() {
   if (!inIntro) return;
   inIntro = false;
-  introShipAltitude = 0;
   definirEstaticaRadio(0);
   limparFalasAgendadas();
   document.getElementById('intro-overlay').style.display = 'none';
@@ -839,88 +846,28 @@ function atualizarCenaIntroducao() {
   document.getElementById('phone-rec-time').innerText = '00:' + String(recSecs).padStart(2, '0');
 
   const sub = document.getElementById('intro-subtitle');
-  const actLabel = document.getElementById('intro-act-label');
   const phoneFrame = document.getElementById('phone-frame');
 
-  // ATO 1 (0s - 10s): Sara segura o celular mostrando o céu e a cidade em chamas
-  if (introTimer < 600) {
-    actLabel.innerText = 'CENA I — VÍDEO DO CELULAR DE SARA';
-    introShockwaveRadius += 3.2;
-
-    if (introTimer === 180 || introTimer === 420) {
-      lightningAlpha = 0.7;
-      tocarEfeitoSonoro('thunder');
-      screenShake = 8;
-    }
-
-    camera.x = 780 + (introTimer * 0.75) - canvas.width / 2;
-    camera.y = 1150 - canvas.height / 2;
+  // Relâmpagos distantes ao fundo durante a gravação
+  if (introTimer === 240 || introTimer === 780) {
+    lightningAlpha = 0.55;
+    tocarEfeitoSonoro('thunder');
   }
-  // ATO 2 (10s - 18s): Ela vira o celular mostrando as ruínas e passando as instruções
-  else if (introTimer < 1080) {
-    actLabel.innerText = 'CENA II — AS REGRAS DE SOBREVIVÊNCIA';
-    const t2 = introTimer - 600;
-    camera.x = 1220 + (t2 * 0.95) - canvas.width / 2;
-    camera.y = 1180 + Math.sin(t2 * 0.01) * 120 - canvas.height / 2;
-  }
-  // ATO 3 (18s - 24s): O monstro quadrúpede surge atrás dela e derruba o celular
-  else if (introTimer < 1440) {
-    actLabel.innerText = 'CENA III — ATAQUE NO SETOR NORTE';
-    const m = quadrupedMonsters[0];
-    camera.x = (m.x + 24) - canvas.width / 2;
-    camera.y = (m.y + 15) - canvas.height / 2;
 
-    // Aos 22.8s (frame 1370): CORTA A FALA NO MEIO E TOCA O BARULHO DE MONSTRO!
-    if (introTimer >= 1370 && !introCutTriggered) {
-      introCutTriggered = true;
-      limparFalasAgendadas(); // Corta a voz dela bruscamente!
-      tocarEfeitoSonoro('monster_ambush_roar');
-      definirEstaticaRadio(0.20);
-      screenShake = 26;
-      flashDamage = 15;
+  // Aos 22.8s (frame 1370): O monstro ataca, corta a voz no meio e derruba o celular
+  if (introTimer >= 1370 && !introCutTriggered) {
+    introCutTriggered = true;
+    limparFalasAgendadas();
+    tocarEfeitoSonoro('monster_ambush_roar');
+    definirEstaticaRadio(0.16);
+    screenShake = 26;
+    flashDamage = 15;
 
-      phoneFrame.classList.add('dropped');
-      document.getElementById('rec-dot').style.background = '#94a3b8';
-      document.getElementById('rec-label').innerText = 'ERRO';
-      document.getElementById('phone-signal').innerText = 'TELA TRINCADA';
-      sub.innerText = '[RUGIDO ENSUREDECEDOR — O CELULAR CAI NO CHÃO E O VÍDEO CORROMPE]';
-    }
-  }
-  // ATO 4 (24s - 30s): Corta para o pouso de emergência da Cápsula Aurora
-  else {
-    actLabel.innerText = 'CENA IV — POUSO DA CÁPSULA AURORA';
-    definirEstaticaRadio(0.03);
-    phoneFrame.classList.add('hidden-phone');
-
-    if (introTimer === 1440) {
-      sub.innerText = 'FIM DA GRAVAÇÃO. Iniciando missão na plataforma Aurora...';
-    }
-
-    if (introShipAltitude > 0) {
-      introShipAltitude = Math.max(0, introShipAltitude - 1.5);
-      liftParticles.push({
-        x: escapeShip.x + escapeShip.width / 2 + (Math.random() - 0.5) * 40,
-        y: escapeShip.y + escapeShip.height - introShipAltitude + 6,
-        vx: (Math.random() - 0.5) * 3,
-        vy: 1.2 + Math.random() * 2,
-        life: 30,
-        size: 9 + Math.random() * 12
-      });
-      if (introShipAltitude === 0) {
-        screenShake = 18;
-        tocarEfeitoSonoro('crash_land');
-      }
-    }
-
-    for (let p of liftParticles) {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life--;
-    }
-    liftParticles = liftParticles.filter(p => p.life > 0);
-
-    camera.x = (escapeShip.x + escapeShip.width / 2) - canvas.width / 2;
-    camera.y = (escapeShip.y + escapeShip.height / 2 + 40) - canvas.height / 2;
+    phoneFrame.classList.add('dropped');
+    document.getElementById('rec-dot').style.background = '#94a3b8';
+    document.getElementById('rec-label').innerText = 'SINAL PERDIDO';
+    document.getElementById('phone-signal').innerText = 'TELA TRINCADA';
+    sub.innerText = '[RUGIDO ENSUREDECEDOR — O CELULAR CAI NO CHÃO E A TRANSMISSÃO CORTA]';
   }
 
   if (introTimer >= INTRO_DURATION) {
@@ -928,123 +875,298 @@ function atualizarCenaIntroducao() {
   }
 }
 
+// ==========================================
+// DESENHO DO FUNDO PÓS-APOCALÍPTICO E SARA COM ROUPA MILITAR EM CLOSE-UP
+// ==========================================
 function desenharCenaCelularSara() {
-  if (!inIntro || introTimer >= 1440) return;
+  if (!inIntro) return;
 
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2 - 20;
-  // Tremor realista da mão segurando o celular
-  const handShakeX = Math.sin(animFrame * 0.25) * (introTimer > 1080 ? 8 : 3.5);
-  const handShakeY = Math.cos(animFrame * 0.31) * (introTimer > 1080 ? 6 : 2.5);
+  const w = canvas.width;
+  const h = canvas.height;
 
-  const sx = cx + handShakeX;
-  const sy = cy + handShakeY;
+  // 1. FUNDO DETALHADO (Céu alaranjado de radiação, ruínas, fumaça e fogo ao fundo)
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+  skyGrad.addColorStop(0, '#1c120d');
+  skyGrad.addColorStop(0.45, '#431a0b');
+  skyGrad.addColorStop(0.78, '#7c2d12');
+  skyGrad.addColorStop(1, '#140c08');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Nuvens densas de fumaça e radiação no horizonte
+  ctx.fillStyle = 'rgba(20, 14, 12, 0.55)';
+  for (let i = 0; i < 6; i++) {
+    const cloudX = ((i * 280 + animFrame * 0.25) % (w + 300)) - 150;
+    const cloudY = h * 0.22 + Math.sin(i * 1.7) * 35;
+    ctx.beginPath();
+    ctx.ellipse(cloudX, cloudY, 190, 55, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Silhueta de prédios destruídos e antenas ao fundo
+  const skyline = [
+    { x: 0.03, y: 0.36, bw: 0.11, bh: 0.64 },
+    { x: 0.13, y: 0.44, bw: 0.09, bh: 0.56 },
+    { x: 0.23, y: 0.30, bw: 0.12, bh: 0.70 },
+    { x: 0.66, y: 0.32, bw: 0.11, bh: 0.68 },
+    { x: 0.78, y: 0.42, bw: 0.10, bh: 0.58 },
+    { x: 0.88, y: 0.35, bw: 0.12, bh: 0.65 }
+  ];
+
+  ctx.fillStyle = '#140e0c';
+  for (let b of skyline) {
+    const bx = w * b.x;
+    const by = h * b.y;
+    const bw = w * b.bw;
+    const bh = h * b.bh;
+    ctx.fillRect(bx, by, bw, bh);
+
+    // Janelas em chamas / destruídas nos prédios do fundo
+    ctx.fillStyle = 'rgba(249, 115, 22, 0.38)';
+    for (let wy = by + 22; wy < h * 0.75; wy += 34) {
+      for (let wx = bx + 14; wx < bx + bw - 18; wx += 26) {
+        if ((Math.floor(wx + wy) % 3) === 0) {
+          ctx.fillRect(wx, wy, 10, 14);
+        }
+      }
+    }
+    ctx.fillStyle = '#140e0c';
+  }
+
+  // Focos de incêndio nas ruínas atrás dela
+  desenharFogoAnimado(w * 0.18, h * 0.68, 1.4);
+  desenharFogoAnimado(w * 0.82, h * 0.66, 1.5);
+
+  // Cinzas e brasas voando no fundo
+  for (let p of ashParticles) {
+    ctx.fillStyle = p.isEmber ? 'rgba(251, 146, 60, 0.78)' : 'rgba(214, 211, 209, 0.32)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2. SARGENTO SARA EM CLOSE-UP (BEM PRÓXIMA DA CÂMERA, COM UNIFORME MILITAR)
+  const scale = Math.min(w, h) / 540; // Escala responsiva para ficar bem próxima em qualquer monitor
+  const handShakeX = Math.sin(animFrame * 0.22) * (introTimer > 1180 ? 11 : 4.5);
+  const handShakeY = Math.cos(animFrame * 0.29) * (introTimer > 1180 ? 8 : 3);
+
+  const sx = w * 0.5 + handShakeX;
+  const sy = h * 0.52 + handShakeY;
 
   ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(scale, scale);
 
-  // Brilho alaranjado do fogo das ruínas iluminando o rosto dela
-  const fireGlow = ctx.createRadialGradient(sx, sy + 20, 15, sx, sy + 20, 190);
-  fireGlow.addColorStop(0, 'rgba(249, 115, 22, 0.28)');
-  fireGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = fireGlow;
+  // Luz quente das chamas contornando os ombros e rosto dela
+  const rimLight = ctx.createRadialGradient(0, 10, 30, 0, 10, 260);
+  rimLight.addColorStop(0, 'rgba(249, 115, 22, 0.24)');
+  rimLight.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = rimLight;
   ctx.beginPath();
-  ctx.arc(sx, sy + 20, 190, 0, Math.PI * 2);
+  ctx.arc(0, 10, 260, 0, Math.PI * 2);
   ctx.fill();
 
-  // Ombros e jaqueta de sobrevivente de Sara
-  ctx.fillStyle = '#334155';
-  ctx.strokeStyle = '#0f172a';
+  // Cabelo castanho escuro preso em coque tático com mechas soltas
+  const windHair = Math.sin(animFrame * 0.18) * 6;
+  ctx.fillStyle = '#24150f';
+  ctx.beginPath();
+  ctx.arc(0, -108, 28, 0, Math.PI * 2); // Coque militar atrás
+  ctx.arc(0, -25, 68, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ombros largos com Gandola / Uniforme Militar Verde-Oliva
+  ctx.fillStyle = '#364532';
+  ctx.strokeStyle = '#111610';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(-145, 230);
+  ctx.quadraticCurveTo(-135, 92, -48, 76);
+  ctx.lineTo(48, 76);
+  ctx.quadraticCurveTo(135, 92, 145, 230);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Manchas de camuflagem tática no uniforme
+  ctx.fillStyle = '#263123';
+  ctx.beginPath();
+  ctx.ellipse(-85, 145, 26, 16, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(90, 155, 28, 18, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Gola alta do uniforme militar
+  ctx.fillStyle = '#2b3828';
+  ctx.beginPath();
+  ctx.moveTo(-36, 68);
+  ctx.lineTo(-46, 106);
+  ctx.lineTo(0, 96);
+  ctx.lineTo(46, 106);
+  ctx.lineTo(36, 68);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Colete Balístico Tático sobre o uniforme
+  ctx.fillStyle = '#1f261e';
+  ctx.strokeStyle = '#0c0f0b';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.ellipse(sx, sy + 95, 62, 42, 0, Math.PI, 0);
+  ctx.moveTo(-78, 86);
+  ctx.lineTo(-86, 230);
+  ctx.lineTo(86, 230);
+  ctx.lineTo(78, 86);
+  ctx.lineTo(44, 82);
+  ctx.lineTo(32, 128);
+  ctx.lineTo(-32, 128);
+  ctx.lineTo(-44, 82);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+  // Bolsos táticos e tiras MOLLE no colete
+  ctx.fillStyle = '#2b3429';
+  ctx.fillRect(-66, 148, 48, 52);
+  ctx.strokeRect(-66, 148, 48, 52);
+  ctx.fillRect(18, 148, 48, 52);
+  ctx.strokeRect(18, 148, 48, 52);
+
+  // Patch militar (bandeira / insígnia) no peito
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(-62, 114, 34, 18);
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-62, 114, 34, 18);
+
+  // Rádio Walkie-Talkie preso no ombro esquerdo com antena e LED piscando
+  ctx.fillStyle = '#18181b';
+  ctx.strokeStyle = '#09090b';
+  ctx.lineWidth = 2.5;
+  ctx.fillRect(-84, 72, 26, 44);
+  ctx.strokeRect(-84, 72, 26, 44);
+  // Antena do walkie-talkie
+  ctx.fillRect(-80, 26, 5, 46);
+  // LED verde de transmissão
+  ctx.fillStyle = (animFrame % 16 < 10) ? '#22c55e' : '#14532d';
+  ctx.beginPath();
+  ctx.arc(-66, 82, 3.5, 0, Math.PI * 2);
+  ctx.fill();
 
   // Pescoço
-  ctx.fillStyle = '#eab68a';
-  ctx.fillRect(sx - 12, sy + 32, 24, 24);
+  ctx.fillStyle = '#e6b084';
+  ctx.fillRect(-22, 34, 44, 48);
 
-  // Cabelos presos com mechas soltas balançando no vento
-  const windHair = Math.sin(animFrame * 0.18) * 5;
-  ctx.fillStyle = '#291711';
+  // Rosto bem próximo da câmera
+  ctx.fillStyle = '#f2c6a0';
+  ctx.strokeStyle = '#1c120c';
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(sx, sy - 6, 42, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Rosto de Sara
-  ctx.fillStyle = '#f5cba7';
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, 32, 40, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -14, 52, 64, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // Franja e cabelo lateral
-  ctx.fillStyle = '#291711';
+  // Marcas de fuligem / poeira de combate no rosto
+  ctx.fillStyle = 'rgba(41, 37, 36, 0.28)';
   ctx.beginPath();
-  ctx.arc(sx, sy - 12, 34, Math.PI, 0);
-  ctx.lineTo(sx + 34 + windHair, sy + 24);
-  ctx.lineTo(sx + 24, sy - 4);
-  ctx.lineTo(sx - 24, sy - 4);
-  ctx.lineTo(sx - 34 + windHair, sy + 24);
+  ctx.ellipse(-28, 6, 12, 5, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(30, -4, 10, 4, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Franja e mechas frontais balançando
+  ctx.fillStyle = '#24150f';
+  ctx.beginPath();
+  ctx.arc(0, -30, 54, Math.PI, 0);
+  ctx.lineTo(54 + windHair, 24);
+  ctx.lineTo(40, -16);
+  ctx.lineTo(-10, -24);
+  ctx.lineTo(-42, -14);
+  ctx.lineTo(-54 + windHair, 24);
   ctx.closePath();
   ctx.fill();
 
-  // Olhos assustados olhando para a câmera (e olhando para o lado no Ato 3)
-  const lookSide = introTimer > 1080 ? -4 : 0;
+  // Fone comunicador tático (headset) no ouvido direito com haste até perto da boca
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.roundRect(48, -22, 12, 28, 5);
+  ctx.fill();
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(52, 2);
+  ctx.quadraticCurveTo(46, 22, 22, 20);
+  ctx.stroke();
+
+  // Olhos expressivos olhando direto para a câmera (e olhando para o lado no ataque)
+  const lookSide = introTimer > 1180 ? -6 : 0;
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.ellipse(sx - 12, sy - 4, 6.5, 4.5, 0, 0, Math.PI * 2);
-  ctx.ellipse(sx + 12, sy - 4, 6.5, 4.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(-20, -18, 11, 7.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(20, -18, 11, 7.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = '#1e293b';
   ctx.beginPath();
-  ctx.arc(sx - 12 + lookSide, sy - 4, 3, 0, Math.PI * 2);
-  ctx.arc(sx + 12 + lookSide, sy - 4, 3, 0, Math.PI * 2);
+  ctx.arc(-20 + lookSide, -18, 4.8, 0, Math.PI * 2);
+  ctx.arc(20 + lookSide, -18, 4.8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Sobrancelhas tensas
-  ctx.strokeStyle = '#1c1917';
-  ctx.lineWidth = 2.5;
+  // Brilho nos olhos
+  ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.moveTo(sx - 19, sy - 12);
-  ctx.lineTo(sx - 6, sy - 10);
-  ctx.moveTo(sx + 19, sy - 12);
-  ctx.lineTo(sx + 6, sy - 10);
+  ctx.arc(-22 + lookSide, -20, 1.8, 0, Math.PI * 2);
+  ctx.arc(18 + lookSide, -20, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Sobrancelhas firmes
+  ctx.strokeStyle = '#1c120c';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(-32, -30);
+  ctx.lineTo(-10, -26);
+  ctx.moveTo(32, -30);
+  ctx.lineTo(10, -26);
   ctx.stroke();
 
-  // Boca animada falando rápido no vídeo
-  const mouthOpen = introCutTriggered ? 7 : Math.abs(Math.sin(animFrame * 0.45)) * 5.5 + 1.5;
+  // Nariz sutil
+  ctx.strokeStyle = '#c9936b';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -12);
+  ctx.lineTo(-3, 2);
+  ctx.lineTo(3, 4);
+  ctx.stroke();
+
+  // Boca sincronizada com a fala
+  const mouthOpen = introCutTriggered ? 11 : Math.abs(Math.sin(animFrame * 0.42)) * 8 + 2;
   ctx.fillStyle = '#7f1d1d';
   ctx.beginPath();
-  ctx.ellipse(sx, sy + 16, 7, mouthOpen, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 20, 11, mouthOpen, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  // Mão direita segurando a lateral do celular
-  ctx.fillStyle = '#eab68a';
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.roundRect(sx + 148, sy + 35, 26, 68, 12);
-  ctx.fill();
-  ctx.stroke();
-
-  // Se o celular já caiu (após o ataque), desenha rachaduras de vidro na tela
-  if (introCutTriggered) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(sx - 80, sy - 140);
-    ctx.lineTo(sx - 15, sy - 20);
-    ctx.lineTo(sx + 75, sy + 95);
-    ctx.moveTo(sx - 15, sy - 20);
-    ctx.lineTo(sx - 95, sy + 60);
-    ctx.moveTo(sx - 15, sy - 20);
-    ctx.lineTo(sx + 85, sy - 70);
-    ctx.stroke();
-  }
 
   ctx.restore();
+
+  // Sombra rápida do monstro passando atrás dela nos últimos 3 segundos
+  if (introTimer > 1220) {
+    const monsterPassX = w * 0.25 + ((introTimer - 1220) * 6);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(monsterPassX, h * 0.58, 120, 48, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Vidro trincado quando o celular cai
+  if (introCutTriggered) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.35, h * 0.15);
+    ctx.lineTo(w * 0.48, h * 0.48);
+    ctx.lineTo(w * 0.72, h * 0.82);
+    ctx.moveTo(w * 0.48, h * 0.48);
+    ctx.lineTo(w * 0.22, h * 0.74);
+    ctx.moveTo(w * 0.48, h * 0.48);
+    ctx.lineTo(w * 0.78, h * 0.28);
+    ctx.stroke();
+  }
 }
 
 function emitirOndaSonora(x, y, maxRadius) {
@@ -2156,7 +2278,7 @@ function desenharFogoAnimado(fx, fy, escala = 1) {
 }
 
 // ==========================================
-// CONSTRUÇÕES DESTRUÍDAS MAIS REALISTAS
+// CONSTRUÇÕES DESTRUÍDAS
 // ==========================================
 function desenharConstrucaoInterior(b) {
   const bx = b.x - camera.x;
@@ -2398,14 +2520,13 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  const verticalOffset = (inIntro && introTimer >= 1440) ? introShipAltitude : (inIntro ? 450 : shipLiftOffset);
-  const shipY = sy - verticalOffset;
-  const shakeX = (isLaunching || playerBoardedShip || (inIntro && introTimer >= 1440 && introShipAltitude > 0)) ? (Math.random() - 0.5) * 4.5 : 0;
+  const shipY = sy - shipLiftOffset;
+  const shakeX = (isLaunching || playerBoardedShip) ? (Math.random() - 0.5) * 4.5 : 0;
   const shakeY = isLaunching ? (Math.random() - 0.5) * 3 : 0;
   const cx = sx + escapeShip.width / 2 + shakeX;
   const cy = shipY + escapeShip.height / 2 + shakeY;
 
-  if (isLaunching || playerBoardedShip || (inIntro && introTimer >= 1440 && introShipAltitude > 0)) {
+  if (isLaunching || playerBoardedShip) {
     const scaleFlame = playerBoardedShip ? 1.5 : 1.1;
     desenharFogoAnimado(cx - 18, shipY + escapeShip.height + 6, scaleFlame);
     desenharFogoAnimado(cx + 18, shipY + escapeShip.height + 6, scaleFlame);
@@ -2461,7 +2582,7 @@ function desenharNaveEspacial() {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  if (playerBoardedShip || inIntro) {
+  if (playerBoardedShip) {
     ctx.fillStyle = '#ffdbac';
     ctx.beginPath();
     ctx.arc(cx, cy - 7, 4.5, 0, Math.PI * 2);
@@ -2484,7 +2605,7 @@ function desenharNaveEspacial() {
     ctx.fill();
   }
 
-  if (!playerBoardedShip && !inIntro) {
+  if (!playerBoardedShip) {
     ctx.fillStyle = parts >= 3 ? '#00ff88' : '#ffcc00';
     ctx.font = '8px "Press Start 2P"';
     ctx.fillText(`NAVE AURORA (${parts}/3)`, sx - 16, sy - 6);
@@ -2536,14 +2657,6 @@ function desenharCenario() {
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(sw.x - camera.x, sw.y - camera.y, sw.radius, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  if (inIntro && introTimer < 600) {
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.35)';
-    ctx.lineWidth = 18;
-    ctx.beginPath();
-    ctx.arc(canvas.width * 0.3, canvas.height * 0.4, introShockwaveRadius % 1200, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -2713,11 +2826,10 @@ function desenharMonstroQuadrupede(m) {
   if (screenX < -100 || screenX > canvas.width + 100 || screenY < -100 || screenY > canvas.height + 100) return;
 
   const facing = m.facing || 1;
-  const isAnimating = m.isMoving || (inIntro && introTimer >= 1080 && introTimer < 1440);
-  const cycle = animFrame * ((m.wasChasing || inIntro) ? 0.42 : 0.18);
-  const strideFront = isAnimating ? Math.sin(cycle) * 8 : 0;
-  const strideBack = isAnimating ? Math.cos(cycle) * 8 : 0;
-  const spineWave = isAnimating ? Math.sin(cycle * 2) * 2.5 : 0;
+  const cycle = animFrame * (m.wasChasing ? 0.42 : 0.18);
+  const strideFront = m.isMoving ? Math.sin(cycle) * 8 : 0;
+  const strideBack = m.isMoving ? Math.cos(cycle) * 8 : 0;
+  const spineWave = m.isMoving ? Math.sin(cycle * 2) * 2.5 : 0;
 
   const cx = screenX + m.width / 2;
   const cy = screenY + m.height / 2;
@@ -3047,19 +3159,12 @@ function desenharMinimapa() {
 }
 
 function desenharIluminacaoEClima() {
-  for (let p of ashParticles) {
-    ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.25)';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   if (inIntro) {
-    // Desenha Sara segurando o celular e falando na câmera frontal
+    // Renderiza apenas a transmissão de vídeo em tela cheia da Sargento Sara
     desenharCenaCelularSara();
 
     if (lightningAlpha > 0) {
-      ctx.fillStyle = `rgba(220, 235, 255, ${lightningAlpha * 0.28})`;
+      ctx.fillStyle = `rgba(220, 235, 255, ${lightningAlpha * 0.25})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     if (flashDamage > 0) {
@@ -3068,6 +3173,13 @@ function desenharIluminacaoEClima() {
       flashDamage--;
     }
     return;
+  }
+
+  for (let p of ashParticles) {
+    ctx.fillStyle = p.isEmber ? 'rgba(255, 120, 30, 0.65)' : 'rgba(200, 190, 180, 0.25)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   const screenPx = player.x + player.width / 2 - camera.x;
@@ -3136,6 +3248,11 @@ function desenharIluminacaoEClima() {
 }
 
 function desenhar() {
+  if (inIntro) {
+    desenharIluminacaoEClima();
+    return;
+  }
+
   ctx.fillStyle = '#140f0c';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -3170,7 +3287,7 @@ function desenhar() {
     desenharMonstroQuadrupede(m);
   }
 
-  if (!playerBoardedShip && !inIntro) {
+  if (!playerBoardedShip) {
     desenharPersonagemDetalhado(player.x, player.y, player, player.isMoving, false, false);
   }
 

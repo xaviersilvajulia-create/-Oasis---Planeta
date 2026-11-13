@@ -12,7 +12,7 @@
   <!-- TELA INICIAL -->
   <div id="login-screen">
     <div class="login-box">
-      <div class="badge-alert">ARQUIVO DE VÍDEO RECUPERADO — CELULAR DE SARA</div>
+      <div class="badge-alert">TRANSMISSÃO DE VÍDEO MILITAR — CANAL TÁTICO 04</div>
       <h1>ÚLTIMO RESPIRO</h1>
       <p class="subtitle">ECOS DA TERRA</p>
       <p class="desc">
@@ -30,39 +30,43 @@
   <div id="game-ui" style="display: none;">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- OVERLAY DA CENA DE VÍDEO GRAVADO NO CELULAR (30 SEGUNDOS) -->
+    <!-- OVERLAY DA CENA DE VÍDEO EM TELA CHEIA (24 SEGUNDOS) -->
     <div id="intro-overlay" style="display: none;">
-      <div class="intro-act-badge" id="intro-act-label">GRAVAÇÃO RECUPERADA — 04:17 AM</div>
-
-      <!-- MOLDURA DO CELULAR SEGURADO POR SARA -->
-      <div class="phone-frame" id="phone-frame">
+      <div class="phone-fullscreen-frame" id="phone-frame">
+        <!-- BARRA SUPERIOR DO CELULAR / RÁDIO TÁTICO -->
         <div class="phone-top-bar">
           <div class="rec-indicator">
             <span class="rec-dot" id="rec-dot"></span>
             <span id="rec-label">REC</span>
             <span id="phone-rec-time">00:00</span>
+            <span class="radio-freq-badge" id="intro-act-label">FREQUÊNCIA MILITAR 148.5 MHz — SGT. SARA</span>
           </div>
           <div class="phone-status-icons">
-            <span class="signal-tag" id="phone-signal">SEM REDE</span>
-            <span class="bat-tag">4% 🪫</span>
+            <span class="signal-tag" id="phone-signal">WALKIE-TALKIE LINK</span>
+            <span class="bat-tag">12% 🪫</span>
           </div>
         </div>
 
+        <!-- MARCAS DE FOCO DA CÂMERA EM TELA CHEIA -->
         <div class="phone-camera-grid">
           <div class="corner-mark tl"></div>
           <div class="corner-mark tr"></div>
           <div class="corner-mark bl"></div>
           <div class="corner-mark br"></div>
+          <div class="center-crosshair">+</div>
         </div>
 
-        <div class="phone-bottom-caption">
-          <p id="intro-subtitle">Iniciando reprodução do arquivo de vídeo...</p>
-        </div>
-      </div>
+        <!-- LEGENDA E CONTROLES NA PARTE INFERIOR -->
+        <div class="phone-bottom-area">
+          <div class="phone-bottom-caption">
+            <p id="intro-subtitle">Conectando transmissão de vídeo...</p>
+          </div>
 
-      <div class="intro-controls-bar">
-        <span id="intro-timer">30s</span>
-        <button class="btn-skip" onclick="pularIntroducao()">Pular Vídeo [ENTER]</button>
+          <div class="intro-controls-bar">
+            <span id="intro-timer">24s</span>
+            <button class="btn-skip" onclick="pularIntroducao()">Pular Vídeo [ENTER]</button>
+          </div>
+        </div>
       </div>
     </div>
 
